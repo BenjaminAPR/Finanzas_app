@@ -14,6 +14,9 @@ export default function AccountsPage() {
 
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
+  
+  // States for budget creation/editing
+  const [editingBudgetId, setEditingBudgetId] = useState<string | null>(null);
   const [newBudgetName, setNewBudgetName] = useState('');
   const [newBudgetAmount, setNewBudgetAmount] = useState('');
 
@@ -60,6 +63,9 @@ export default function AccountsPage() {
           return { ...b, spent };
         });
 
+        // Ordenar presupuestos alfabéticamente
+        budgets.sort((a: any, b: any) => a.name.localeCompare(b.name));
+
         return { ...acc, balance, budgets };
       }) || [];
 
@@ -93,27 +99,59 @@ export default function AccountsPage() {
     }
   }
 
-  async function handleCreateBudget(e: React.FormEvent) {
+  async function handleSaveBudget(e: React.FormEvent) {
     e.preventDefault();
-    if (!selectedAccountId) return;
+    if (!selectedAccountId && !editingBudgetId) return;
 
     try {
-      const { error } = await supabase.from('budgets').insert({
-        account_id: selectedAccountId,
-        name: newBudgetName,
-        amount: parseFloat(newBudgetAmount)
-      });
+      const amount = parseFloat(newBudgetAmount) || 0; // Permitir 0
 
-      if (error) throw error;
+      if (editingBudgetId) {
+        // Edit mode
+        const { error } = await supabase.from('budgets').update({
+          name: newBudgetName,
+          amount: amount
+        }).eq('id', editingBudgetId);
+        if (error) throw error;
+      } else {
+        // Create mode
+        const { error } = await supabase.from('budgets').insert({
+          account_id: selectedAccountId,
+          name: newBudgetName,
+          amount: amount
+        });
+        if (error) throw error;
+      }
       
-      setIsBudgetModalOpen(false);
-      setNewBudgetName('');
-      setNewBudgetAmount('');
+      closeBudgetModal();
       loadAccounts();
     } catch (err) {
       console.error(err);
-      alert('Error creando presupuesto');
+      alert('Error guardando presupuesto');
     }
+  }
+
+  function openNewBudgetModal(accountId: string) {
+    setSelectedAccountId(accountId);
+    setEditingBudgetId(null);
+    setNewBudgetName('');
+    setNewBudgetAmount('');
+    setIsBudgetModalOpen(true);
+  }
+
+  function openEditBudgetModal(budget: any) {
+    setSelectedAccountId(budget.account_id);
+    setEditingBudgetId(budget.id);
+    setNewBudgetName(budget.name);
+    setNewBudgetAmount(budget.amount === 0 ? '' : budget.amount.toString());
+    setIsBudgetModalOpen(true);
+  }
+
+  function closeBudgetModal() {
+    setIsBudgetModalOpen(false);
+    setEditingBudgetId(null);
+    setNewBudgetName('');
+    setNewBudgetAmount('');
   }
 
   const formatCurrency = (val: number) => `$${val.toLocaleString('es-CL')}`;
@@ -154,10 +192,7 @@ export default function AccountsPage() {
                   <h4>Presupuestos ({account.budgets?.length || 0})</h4>
                   <button 
                     className={styles.textBtn} 
-                    onClick={() => {
-                      setSelectedAccountId(account.id);
-                      setIsBudgetModalOpen(true);
-                    }}
+                    onClick={() => openNewBudgetModal(account.id)}
                   >
                     + Añadir
                   </button>
@@ -170,19 +205,41 @@ export default function AccountsPage() {
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                     {account.budgets.map((b: any) => {
-                      const progress = Math.min((b.spent / b.amount) * 100, 100);
-                      const isOverBudget = b.spent > b.amount;
+                      // Si el límite es 0, lo consideramos un "Presupuesto Variable" sin límite fijo.
+                      const isVariable = b.amount === 0;
+                      const progress = isVariable ? 0 : Math.min((b.spent / b.amount) * 100, 100);
+                      const isOverBudget = !isVariable && b.spent > b.amount;
                       
                       return (
                         <div key={b.id} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', padding: '0.75rem', background: 'var(--bg-primary)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.875rem' }}>
                             <span style={{ fontWeight: 600 }}>{b.name}</span>
-                            <span>{formatCurrency(b.spent)} / {formatCurrency(b.amount)}</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                              <span>
+                                {isVariable 
+                                  ? `Gastado: ${formatCurrency(b.spent)}`
+                                  : `${formatCurrency(b.spent)} / ${formatCurrency(b.amount)}`}
+                              </span>
+                              <button 
+                                onClick={() => openEditBudgetModal(b)}
+                                style={{ background: 'none', border: 'none', color: 'var(--accent-color)', cursor: 'pointer', fontSize: '1rem', padding: '0.2rem' }}
+                                title="Editar presupuesto"
+                              >
+                                ✎
+                              </button>
+                            </div>
                           </div>
-                          <div style={{ height: '6px', background: 'var(--border-color)', borderRadius: '3px', overflow: 'hidden' }}>
-                            <div style={{ height: '100%', width: `${progress}%`, background: isOverBudget ? 'var(--danger)' : 'var(--accent-color)' }}></div>
-                          </div>
-                          {isOverBudget && <span style={{ fontSize: '0.75rem', color: 'var(--danger)' }}>¡Presupuesto excedido!</span>}
+                          {!isVariable && (
+                            <>
+                              <div style={{ height: '6px', background: 'var(--border-color)', borderRadius: '3px', overflow: 'hidden' }}>
+                                <div style={{ height: '100%', width: `${progress}%`, background: isOverBudget ? 'var(--danger)' : 'var(--accent-color)' }}></div>
+                              </div>
+                              {isOverBudget && <span style={{ fontSize: '0.75rem', color: 'var(--danger)' }}>¡Presupuesto excedido!</span>}
+                            </>
+                          )}
+                          {isVariable && (
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Presupuesto Variable (Sin límite definido)</span>
+                          )}
                         </div>
                       )
                     })}
@@ -224,20 +281,28 @@ export default function AccountsPage() {
       {isBudgetModalOpen && (
         <div className={styles.modalOverlay}>
           <div className={`card ${styles.modal}`}>
-            <h3 className="h3">Asignar Presupuesto</h3>
-            <p className="text-secondary" style={{fontSize: '0.875rem', marginTop: '-1rem'}}>Crea un "sobre virtual" dentro de esta cuenta.</p>
-            <form onSubmit={handleCreateBudget} className={styles.form}>
+            <h3 className="h3">{editingBudgetId ? 'Editar Presupuesto' : 'Asignar Presupuesto'}</h3>
+            <p className="text-secondary" style={{fontSize: '0.875rem', marginTop: '-1rem'}}>
+              Crea un "sobre virtual" dentro de esta cuenta. Si el monto varía mes a mes, puedes dejarlo en 0 o actualizarlo cuando cambie.
+            </p>
+            <form onSubmit={handleSaveBudget} className={styles.form}>
               <div className="input-group">
                 <label className="input-label">Nombre del presupuesto</label>
                 <input type="text" className="input-field" placeholder="Ej. Supermercado, Luz, Arriendo..." value={newBudgetName} onChange={e => setNewBudgetName(e.target.value)} required />
               </div>
               <div className="input-group">
-                <label className="input-label">Monto a asignar mensual</label>
-                <input type="number" className="input-field" placeholder="0" value={newBudgetAmount} onChange={e => setNewBudgetAmount(e.target.value)} required />
+                <label className="input-label">Límite mensual (Opcional)</label>
+                <input 
+                  type="number" 
+                  className="input-field" 
+                  placeholder="Dejar vacío para límite variable" 
+                  value={newBudgetAmount} 
+                  onChange={e => setNewBudgetAmount(e.target.value)} 
+                />
               </div>
               <div className={styles.modalActions}>
-                <button type="button" className="btn-secondary" onClick={() => setIsBudgetModalOpen(false)}>Cancelar</button>
-                <button type="submit" className="btn-primary">Crear</button>
+                <button type="button" className="btn-secondary" onClick={closeBudgetModal}>Cancelar</button>
+                <button type="submit" className="btn-primary">Guardar</button>
               </div>
             </form>
           </div>
