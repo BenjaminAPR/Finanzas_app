@@ -15,7 +15,6 @@ export default function AccountsPage() {
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   
-  // States for budget creation/editing
   const [editingBudgetId, setEditingBudgetId] = useState<string | null>(null);
   const [newBudgetName, setNewBudgetName] = useState('');
   const [newBudgetAmount, setNewBudgetAmount] = useState('');
@@ -27,7 +26,6 @@ export default function AccountsPage() {
   async function loadAccounts() {
     try {
       setLoading(true);
-      // Fetch accounts and budgets
       const { data: accData, error } = await supabase
         .from('accounts')
         .select(`*, budgets(*)`)
@@ -35,8 +33,11 @@ export default function AccountsPage() {
 
       if (error) throw error;
 
-      // Fetch transactions to calculate balances
       const { data: txData } = await supabase.from('transactions').select('*');
+
+      const now = new Date();
+      const currentMonth = now.getMonth();
+      const currentYear = now.getFullYear();
 
       let processedAccounts = accData?.map(acc => {
         let balance = 0;
@@ -51,19 +52,23 @@ export default function AccountsPage() {
           });
         }
         
-        // Calculate used budget amounts
         let budgets = acc.budgets || [];
         budgets = budgets.map((b: any) => {
           let spent = 0;
           if (txData) {
             txData.forEach(tx => {
-              if (tx.type === 'expense' && tx.budget_id === b.id) spent += tx.amount;
+              const txDate = new Date(tx.date);
+              // Los presupuestos fijos/variables se calculan sumando solo los gastos del mes actual
+              const isCurrentMonth = txDate.getMonth() === currentMonth && txDate.getFullYear() === currentYear;
+              
+              if (isCurrentMonth && tx.type === 'expense' && tx.budget_id === b.id) {
+                spent += tx.amount;
+              }
             });
           }
           return { ...b, spent };
         });
 
-        // Ordenar presupuestos alfabéticamente
         budgets.sort((a: any, b: any) => a.name.localeCompare(b.name));
 
         return { ...acc, balance, budgets };
@@ -104,17 +109,15 @@ export default function AccountsPage() {
     if (!selectedAccountId && !editingBudgetId) return;
 
     try {
-      const amount = parseFloat(newBudgetAmount) || 0; // Permitir 0
+      const amount = parseFloat(newBudgetAmount) || 0;
 
       if (editingBudgetId) {
-        // Edit mode
         const { error } = await supabase.from('budgets').update({
           name: newBudgetName,
           amount: amount
         }).eq('id', editingBudgetId);
         if (error) throw error;
       } else {
-        // Create mode
         const { error } = await supabase.from('budgets').insert({
           account_id: selectedAccountId,
           name: newBudgetName,
@@ -205,7 +208,6 @@ export default function AccountsPage() {
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                     {account.budgets.map((b: any) => {
-                      // Si el límite es 0, lo consideramos un "Presupuesto Variable" sin límite fijo.
                       const isVariable = b.amount === 0;
                       const progress = isVariable ? 0 : Math.min((b.spent / b.amount) * 100, 100);
                       const isOverBudget = !isVariable && b.spent > b.amount;
@@ -217,7 +219,7 @@ export default function AccountsPage() {
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                               <span>
                                 {isVariable 
-                                  ? `Gastado: ${formatCurrency(b.spent)}`
+                                  ? `Gastado este mes: ${formatCurrency(b.spent)}`
                                   : `${formatCurrency(b.spent)} / ${formatCurrency(b.amount)}`}
                               </span>
                               <button 
@@ -234,7 +236,7 @@ export default function AccountsPage() {
                               <div style={{ height: '6px', background: 'var(--border-color)', borderRadius: '3px', overflow: 'hidden' }}>
                                 <div style={{ height: '100%', width: `${progress}%`, background: isOverBudget ? 'var(--danger)' : 'var(--accent-color)' }}></div>
                               </div>
-                              {isOverBudget && <span style={{ fontSize: '0.75rem', color: 'var(--danger)' }}>¡Presupuesto excedido!</span>}
+                              {isOverBudget && <span style={{ fontSize: '0.75rem', color: 'var(--danger)' }}>¡Presupuesto excedido este mes!</span>}
                             </>
                           )}
                           {isVariable && (
