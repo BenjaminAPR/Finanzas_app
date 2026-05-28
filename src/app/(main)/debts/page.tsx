@@ -6,27 +6,36 @@ import styles from './debts.module.css';
 
 export default function DebtsPage() {
   const [debts, setDebts] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  
   const [isModalOpen, setIsModalOpen] = useState(false);
-
   const [name, setName] = useState('');
   const [totalAmount, setTotalAmount] = useState('');
   const [installmentsCount, setInstallmentsCount] = useState('1');
 
+  // Pay Installment Modal
+  const [isPayModalOpen, setIsPayModalOpen] = useState(false);
+  const [selectedInstallment, setSelectedInstallment] = useState<any>(null);
+  const [payAccountId, setPayAccountId] = useState('');
+
   useEffect(() => {
-    loadDebts();
+    loadData();
   }, []);
 
-  async function loadDebts() {
+  async function loadData() {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('debts')
-        .select(`*, installments(*)`)
-        .order('created_at', { ascending: false });
+      const [debtsRes, accountsRes] = await Promise.all([
+        supabase.from('debts').select(`*, installments(*)`).order('created_at', { ascending: false }),
+        supabase.from('accounts').select('*')
+      ]);
 
-      if (error) throw error;
-      setDebts(data || []);
+      if (debtsRes.data) setDebts(debtsRes.data);
+      if (accountsRes.data) {
+        setAccounts(accountsRes.data);
+        if (accountsRes.data.length > 0) setPayAccountId(accountsRes.data[0].id);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -43,7 +52,6 @@ export default function DebtsPage() {
       const debtAmount = parseFloat(totalAmount);
       const count = parseInt(installmentsCount);
 
-      // Crear deuda
       const { data: newDebt, error: debtError } = await supabase
         .from('debts')
         .insert({
@@ -56,11 +64,10 @@ export default function DebtsPage() {
       
       if (debtError) throw debtError;
 
-      // Crear cuotas
       const installmentAmount = debtAmount / count;
       const installmentsPayload = Array.from({ length: count }).map((_, i) => {
         const date = new Date();
-        date.setMonth(date.getMonth() + i); // Una cuota por mes
+        date.setMonth(date.getMonth() + i);
         return {
           debt_id: newDebt.id,
           installment_number: i + 1,
@@ -77,10 +84,48 @@ export default function DebtsPage() {
       setName('');
       setTotalAmount('');
       setInstallmentsCount('1');
-      loadDebts();
+      loadData();
     } catch (err) {
       console.error(err);
       alert('Error creando deuda');
+    }
+  }
+
+  async function handlePayInstallment(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selectedInstallment || !payAccountId) return;
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // 1. Crear transacción de egreso
+      const debt = debts.find(d => d.id === selectedInstallment.debt_id);
+      
+      const { data: tx, error: txError } = await supabase.from('transactions').insert({
+        type: 'expense',
+        amount: selectedInstallment.amount,
+        description: `Pago Cuota ${selectedInstallment.installment_number} - ${debt?.name}`,
+        date: new Date().toISOString().split('T')[0],
+        account_id: payAccountId,
+        user_id: user.id
+      }).select().single();
+
+      if (txError) throw txError;
+
+      // 2. Marcar cuota como pagada
+      const { error: instError } = await supabase.from('installments')
+        .update({ status: 'paid', paid_date: new Date().toISOString().split('T')[0], transaction_id: tx.id })
+        .eq('id', selectedInstallment.id);
+
+      if (instError) throw instError;
+
+      setIsPayModalOpen(false);
+      setSelectedInstallment(null);
+      loadData();
+    } catch (err) {
+      console.error(err);
+      alert('Error al pagar la cuota');
     }
   }
 
@@ -134,7 +179,13 @@ export default function DebtsPage() {
                         <span>{formatCurrency(inst.amount)}</span>
                         <span className={styles.instDate}>{new Date(inst.due_date).toLocaleDateString('es-CL')}</span>
                         {inst.status === 'pending' ? (
-                          <button className={styles.payBtn}>Pagar</button>
+                          <button 
+                            className={styles.payBtn}
+                            onClick={() => {
+                              setSelectedInstallment(inst);
+                              setIsPayModalOpen(true);
+                            }}
+                          >Pagar</button>
                         ) : (
                           <span className={styles.paidBadge}>✓ Pagado</span>
                         )}
@@ -168,6 +219,30 @@ export default function DebtsPage() {
               <div className={styles.modalActions}>
                 <button type="button" className="btn-secondary" onClick={() => setIsModalOpen(false)}>Cancelar</button>
                 <button type="submit" className="btn-primary">Guardar</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {isPayModalOpen && selectedInstallment && (
+        <div className={styles.modalOverlay}>
+          <div className={`card ${styles.modal}`}>
+            <h3 className="h3">Pagar Cuota {selectedInstallment.installment_number}</h3>
+            <p className="text-secondary" style={{fontSize: '0.875rem', marginTop: '-1rem'}}>
+              Se registrará un egreso por {formatCurrency(selectedInstallment.amount)}.
+            </p>
+            <form onSubmit={handlePayInstallment} className={styles.form}>
+              <div className="input-group">
+                <label className="input-label">¿Desde qué cuenta quieres pagar?</label>
+                <select className="input-field" value={payAccountId} onChange={e => setPayAccountId(e.target.value)} required>
+                  <option value="">Selecciona cuenta</option>
+                  {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.name}</option>)}
+                </select>
+              </div>
+              <div className={styles.modalActions}>
+                <button type="button" className="btn-secondary" onClick={() => setIsPayModalOpen(false)}>Cancelar</button>
+                <button type="submit" className="btn-primary">Confirmar Pago</button>
               </div>
             </form>
           </div>

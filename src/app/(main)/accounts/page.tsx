@@ -8,12 +8,10 @@ export default function AccountsPage() {
   const [accounts, setAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Account Modal
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
   const [newAccountName, setNewAccountName] = useState('');
   const [newAccountType, setNewAccountType] = useState('Cuenta Corriente');
 
-  // Budget Modal
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [newBudgetName, setNewBudgetName] = useState('');
@@ -26,13 +24,46 @@ export default function AccountsPage() {
   async function loadAccounts() {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      // Fetch accounts and budgets
+      const { data: accData, error } = await supabase
         .from('accounts')
         .select(`*, budgets(*)`)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setAccounts(data || []);
+
+      // Fetch transactions to calculate balances
+      const { data: txData } = await supabase.from('transactions').select('*');
+
+      let processedAccounts = accData?.map(acc => {
+        let balance = 0;
+        if (txData) {
+          txData.forEach(tx => {
+            if (tx.type === 'income' && tx.account_id === acc.id) balance += tx.amount;
+            if (tx.type === 'expense' && tx.account_id === acc.id) balance -= tx.amount;
+            if (tx.type === 'transfer') {
+              if (tx.account_id === acc.id) balance -= tx.amount;
+              if (tx.destination_account_id === acc.id) balance += tx.amount;
+            }
+          });
+        }
+        
+        // Calculate used budget amounts
+        let budgets = acc.budgets || [];
+        budgets = budgets.map((b: any) => {
+          let spent = 0;
+          if (txData) {
+            txData.forEach(tx => {
+              if (tx.type === 'expense' && tx.budget_id === b.id) spent += tx.amount;
+            });
+          }
+          return { ...b, spent };
+        });
+
+        return { ...acc, balance, budgets };
+      }) || [];
+
+      setAccounts(processedAccounts);
     } catch (err) {
       console.error(err);
     } finally {
@@ -115,8 +146,7 @@ export default function AccountsPage() {
                   <span className={styles.badge}>{account.type}</span>
                 </div>
                 <div className={styles.balance}>
-                  {/* Balance goes here once calculated */}
-                  Cuenta
+                  {formatCurrency(account.balance)}
                 </div>
               </div>
               <div className={styles.budgetsSection}>
@@ -138,13 +168,24 @@ export default function AccountsPage() {
                     Aún no has separado fondos en esta cuenta.
                   </p>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    {account.budgets.map((b: any) => (
-                      <div key={b.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', padding: '0.5rem', background: 'var(--bg-primary)', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
-                        <span style={{ fontWeight: 500 }}>{b.name}</span>
-                        <span>{formatCurrency(b.amount)} asignado</span>
-                      </div>
-                    ))}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    {account.budgets.map((b: any) => {
+                      const progress = Math.min((b.spent / b.amount) * 100, 100);
+                      const isOverBudget = b.spent > b.amount;
+                      
+                      return (
+                        <div key={b.id} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', padding: '0.75rem', background: 'var(--bg-primary)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem' }}>
+                            <span style={{ fontWeight: 600 }}>{b.name}</span>
+                            <span>{formatCurrency(b.spent)} / {formatCurrency(b.amount)}</span>
+                          </div>
+                          <div style={{ height: '6px', background: 'var(--border-color)', borderRadius: '3px', overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${progress}%`, background: isOverBudget ? 'var(--danger)' : 'var(--accent-color)' }}></div>
+                          </div>
+                          {isOverBudget && <span style={{ fontSize: '0.75rem', color: 'var(--danger)' }}>¡Presupuesto excedido!</span>}
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
               </div>
@@ -153,7 +194,6 @@ export default function AccountsPage() {
         )}
       </div>
 
-      {/* Modal de Cuenta */}
       {isAccountModalOpen && (
         <div className={styles.modalOverlay}>
           <div className={`card ${styles.modal}`}>
@@ -161,22 +201,11 @@ export default function AccountsPage() {
             <form onSubmit={handleCreateAccount} className={styles.form}>
               <div className="input-group">
                 <label className="input-label">Nombre de la cuenta</label>
-                <input 
-                  type="text" 
-                  className="input-field" 
-                  placeholder="Ej. Cuenta Corriente Banco Estado"
-                  value={newAccountName}
-                  onChange={e => setNewAccountName(e.target.value)}
-                  required 
-                />
+                <input type="text" className="input-field" placeholder="Ej. Cuenta Corriente Banco Estado" value={newAccountName} onChange={e => setNewAccountName(e.target.value)} required />
               </div>
               <div className="input-group">
                 <label className="input-label">Tipo</label>
-                <select 
-                  className="input-field"
-                  value={newAccountType}
-                  onChange={e => setNewAccountType(e.target.value)}
-                >
+                <select className="input-field" value={newAccountType} onChange={e => setNewAccountType(e.target.value)}>
                   <option>Cuenta Corriente</option>
                   <option>Cuenta Vista / RUT</option>
                   <option>Cuenta de Ahorro</option>
@@ -192,39 +221,22 @@ export default function AccountsPage() {
         </div>
       )}
 
-      {/* Modal de Presupuesto */}
       {isBudgetModalOpen && (
         <div className={styles.modalOverlay}>
           <div className={`card ${styles.modal}`}>
             <h3 className="h3">Asignar Presupuesto</h3>
-            <p className="text-secondary" style={{fontSize: '0.875rem', marginTop: '-1rem'}}>
-              Crea un "sobre virtual" dentro de esta cuenta para separar tu dinero.
-            </p>
+            <p className="text-secondary" style={{fontSize: '0.875rem', marginTop: '-1rem'}}>Crea un "sobre virtual" dentro de esta cuenta.</p>
             <form onSubmit={handleCreateBudget} className={styles.form}>
               <div className="input-group">
                 <label className="input-label">Nombre del presupuesto</label>
-                <input 
-                  type="text" 
-                  className="input-field" 
-                  placeholder="Ej. Supermercado, Luz, Arriendo..."
-                  value={newBudgetName}
-                  onChange={e => setNewBudgetName(e.target.value)}
-                  required 
-                />
+                <input type="text" className="input-field" placeholder="Ej. Supermercado, Luz, Arriendo..." value={newBudgetName} onChange={e => setNewBudgetName(e.target.value)} required />
               </div>
               <div className="input-group">
                 <label className="input-label">Monto a asignar mensual</label>
-                <input 
-                  type="number" 
-                  className="input-field" 
-                  placeholder="0"
-                  value={newBudgetAmount}
-                  onChange={e => setNewBudgetAmount(e.target.value)}
-                  required 
-                />
+                <input type="number" className="input-field" placeholder="0" value={newBudgetAmount} onChange={e => setNewBudgetAmount(e.target.value)} required />
               </div>
               <div className={styles.modalActions}>
-                <button type="button" className="btn-secondary" onClick={() => { setIsBudgetModalOpen(false); setNewBudgetName(''); setNewBudgetAmount(''); }}>Cancelar</button>
+                <button type="button" className="btn-secondary" onClick={() => setIsBudgetModalOpen(false)}>Cancelar</button>
                 <button type="submit" className="btn-primary">Crear</button>
               </div>
             </form>

@@ -12,42 +12,70 @@ export default function DashboardPage() {
   const [accounts, setAccounts] = useState<any[]>([]);
 
   useEffect(() => {
-    async function loadData() {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          // Obtener perfil
-          const { data: profileData } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', user.id)
-            .single();
-          
-          if (profileData) setProfile(profileData);
-
-          // Cargar cuentas
-          const { data: accountsData } = await supabase
-            .from('accounts')
-            .select('*');
-          
-          if (accountsData) setAccounts(accountsData);
-          
-          // Por ahora mockearemos el total balance hasta armar las queries reales
-          setTotalBalance(0);
-        }
-      } catch (error) {
-        console.error('Error loading data', error);
-      } finally {
-        setLoading(false);
-      }
-    }
-
     loadData();
   }, []);
 
-  if (loading) {
-    return <div className={styles.loading}>Cargando panel...</div>;
+  async function loadData() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        // Obtener perfil
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+        if (profileData) setProfile(profileData);
+
+        // Cargar cuentas y sus balances reales
+        const { data: accountsData } = await supabase.from('accounts').select('*');
+        const { data: transactionsData } = await supabase.from('transactions').select('*');
+
+        let globalBalance = 0;
+        let globalTithe = 0;
+        let processedAccounts = accountsData?.map(acc => ({...acc, balance: 0})) || [];
+
+        if (transactionsData) {
+          transactionsData.forEach(tx => {
+            // Calcular Diezmo separado
+            if (tx.is_tithe && tx.type === 'income') {
+              globalTithe += tx.amount;
+            } else if (tx.is_tithe && tx.type === 'expense') {
+              globalTithe -= tx.amount;
+            }
+
+            // Calcular balance global (sólo ingresos y egresos, transferencias no cambian el total global)
+            if (tx.type === 'income') globalBalance += tx.amount;
+            if (tx.type === 'expense') globalBalance -= tx.amount;
+
+            // Calcular balances por cuenta
+            const originAcc = processedAccounts.find(a => a.id === tx.account_id);
+            const destAcc = processedAccounts.find(a => a.id === tx.destination_account_id);
+
+            if (tx.type === 'income' && originAcc) originAcc.balance += tx.amount; // En DB guardamos income apuntando a account_id como destino
+            if (tx.type === 'expense' && originAcc) originAcc.balance -= tx.amount;
+            
+            if (tx.type === 'transfer') {
+              if (originAcc) originAcc.balance -= tx.amount;
+              if (destAcc) destAcc.balance += tx.amount;
+            }
+          });
+        }
+
+        setAccounts(processedAccounts);
+        setTotalBalance(globalBalance);
+        setTithe(globalTithe);
+      }
+    } catch (error) {
+      console.error('Error loading data', error);
+    } finally {
+      setLoading(false);
+    }
   }
+
+  const formatCurrency = (val: number) => `$${val.toLocaleString('es-CL')}`;
+
+  if (loading) return <div className={styles.loading}>Cargando panel...</div>;
 
   return (
     <div className={styles.dashboard}>
@@ -56,40 +84,34 @@ export default function DashboardPage() {
           <h1 className="h2">Hola, {profile?.full_name || 'Usuario'} 👋</h1>
           <p className="text-secondary">Aquí está el resumen financiero de tu hogar.</p>
         </div>
-        <button className="btn-primary">
+        <button className="btn-primary" onClick={() => window.location.href = '/transactions'}>
           <span>+</span> Registrar Movimiento
         </button>
       </header>
 
       <div className={styles.grid}>
-        {/* Balance Total Card */}
         <div className={`card ${styles.mainCard}`}>
           <h3 className="h3">Balance Total</h3>
           <div className={styles.amount}>
-            ${totalBalance.toLocaleString('es-CL')}
+            {formatCurrency(totalBalance)}
           </div>
           <div className={styles.cardFooter}>
             <span className={styles.trend}>↑ Actualizado hoy</span>
           </div>
         </div>
 
-        {/* Diezmo Card */}
         <div className={`card ${styles.titheCard}`}>
           <div className={styles.titheHeader}>
             <h3 className="h3">Fondo de Diezmo</h3>
-            <button className="btn-secondary" style={{ padding: '0.5rem 1rem', fontSize: '0.875rem' }}>
-              Agregar
-            </button>
           </div>
           <div className={styles.amount}>
-            ${tithe.toLocaleString('es-CL')}
+            {formatCurrency(tithe)}
           </div>
           <p className="text-secondary" style={{ marginTop: '0.5rem', fontSize: '0.875rem' }}>
-            Dinero apartado manualmente este mes.
+            Fondo separado de ingresos.
           </p>
         </div>
 
-        {/* Cuentas */}
         <div className={`card ${styles.accountsCard}`}>
           <h3 className="h3" style={{ marginBottom: '1.5rem' }}>Tus Cuentas</h3>
           {accounts.length === 0 ? (
@@ -106,7 +128,7 @@ export default function DashboardPage() {
                     </div>
                   </div>
                   <div className={styles.accountBalance}>
-                    $0 {/* TODO: Calcular balance */}
+                    {formatCurrency(acc.balance)}
                   </div>
                 </li>
               ))}
