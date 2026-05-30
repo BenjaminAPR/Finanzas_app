@@ -29,7 +29,7 @@ export default function TransactionsPage() {
     try {
       setLoading(true);
       const [transRes, accRes, budgRes, profRes] = await Promise.all([
-        supabase.from('transactions').select('*').order('date', { ascending: false }),
+        supabase.from('transactions').select('*').order('created_at', { ascending: false }),
         supabase.from('accounts').select('*'),
         supabase.from('budgets').select('*'),
         supabase.from('profiles').select('*')
