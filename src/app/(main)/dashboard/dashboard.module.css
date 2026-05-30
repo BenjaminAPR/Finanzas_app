@@ -31,6 +31,13 @@
   gap: 1.5rem;
 }
 
+@media (max-width: 768px) {
+  .grid {
+    display: flex;
+    flex-direction: column;
+  }
+}
+
 .mainCard {
   grid-column: span 8;
   background: var(--accent-gradient);
@@ -55,6 +62,12 @@
   font-weight: 700;
   letter-spacing: -0.025em;
   margin: 1rem 0;
+}
+
+@media (max-width: 768px) {
+  .amount {
+    font-size: 2.5rem;
+  }
 }
 
 .titheHeader {
