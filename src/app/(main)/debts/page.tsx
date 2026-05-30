@@ -18,6 +18,12 @@ export default function DebtsPage() {
   const [isPayModalOpen, setIsPayModalOpen] = useState(false);
   const [selectedInstallment, setSelectedInstallment] = useState<any>(null);
   const [payAccountId, setPayAccountId] = useState('');
+  const [payAmount, setPayAmount] = useState('');
+
+  // Edit Installment Modal
+  const [isEditInstModalOpen, setIsEditInstModalOpen] = useState(false);
+  const [selectedEditInst, setSelectedEditInst] = useState<any>(null);
+  const [editInstAmount, setEditInstAmount] = useState('');
 
   useEffect(() => {
     loadData();
@@ -99,12 +105,15 @@ export default function DebtsPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // 1. Crear transacción de egreso
       const debt = debts.find(d => d.id === selectedInstallment.debt_id);
-      
+      const actualAmount = parseFloat(payAmount);
+      const originalAmount = selectedInstallment.amount;
+      const difference = actualAmount - originalAmount;
+
+      // 1. Crear transacción de egreso por el monto real pagado
       const { data: tx, error: txError } = await supabase.from('transactions').insert({
         type: 'expense',
-        amount: selectedInstallment.amount,
+        amount: actualAmount,
         description: `Pago Cuota ${selectedInstallment.installment_number} - ${debt?.name}`,
         date: new Date().toISOString().split('T')[0],
         account_id: payAccountId,
@@ -113,19 +122,62 @@ export default function DebtsPage() {
 
       if (txError) throw txError;
 
-      // 2. Marcar cuota como pagada
+      // 2. Marcar cuota como pagada y actualizar su monto real
       const { error: instError } = await supabase.from('installments')
-        .update({ status: 'paid', paid_date: new Date().toISOString().split('T')[0], transaction_id: tx.id })
+        .update({ 
+          status: 'paid', 
+          paid_date: new Date().toISOString().split('T')[0], 
+          transaction_id: tx.id,
+          amount: actualAmount 
+        })
         .eq('id', selectedInstallment.id);
 
       if (instError) throw instError;
 
+      // 3. Si hay diferencia, ajustarla en la última cuota pendiente de la misma deuda
+      if (difference !== 0 && debt?.installments) {
+        const pendingInsts = debt.installments.filter((i: any) => i.status === 'pending' && i.id !== selectedInstallment.id);
+        if (pendingInsts.length > 0) {
+          // Obtener la cuota con el número más alto
+          const lastInst = pendingInsts.reduce((prev: any, curr: any) => (prev.installment_number > curr.installment_number) ? prev : curr);
+          const newLastAmount = Math.max(lastInst.amount - difference, 0); // Evitar cuotas negativas
+          
+          const { error: adjError } = await supabase.from('installments')
+            .update({ amount: newLastAmount })
+            .eq('id', lastInst.id);
+            
+          if (adjError) throw adjError;
+        }
+      }
+
       setIsPayModalOpen(false);
       setSelectedInstallment(null);
+      setPayAmount('');
       loadData();
     } catch (err) {
       console.error(err);
       alert('Error al pagar la cuota');
+    }
+  }
+
+  async function handleEditInstallment(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selectedEditInst) return;
+
+    try {
+      const newAmount = parseFloat(editInstAmount);
+      const { error } = await supabase.from('installments')
+        .update({ amount: newAmount })
+        .eq('id', selectedEditInst.id);
+
+      if (error) throw error;
+
+      setIsEditInstModalOpen(false);
+      setSelectedEditInst(null);
+      loadData();
+    } catch (err) {
+      console.error(err);
+      alert('Error al editar la cuota');
     }
   }
 
@@ -203,13 +255,24 @@ export default function DebtsPage() {
                         <span>{formatCurrency(inst.amount)}</span>
                         <span className={styles.instDate}>{new Date(inst.due_date).toLocaleDateString('es-CL')}</span>
                         {inst.status === 'pending' ? (
-                          <button 
-                            className={styles.payBtn}
-                            onClick={() => {
-                              setSelectedInstallment(inst);
-                              setIsPayModalOpen(true);
-                            }}
-                          >Pagar</button>
+                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <button 
+                              className={styles.payBtn}
+                              onClick={() => {
+                                setSelectedInstallment(inst);
+                                setPayAmount(inst.amount.toString());
+                                setIsPayModalOpen(true);
+                              }}
+                            >Pagar</button>
+                            <button 
+                              onClick={() => {
+                                setSelectedEditInst(inst);
+                                setEditInstAmount(inst.amount.toString());
+                                setIsEditInstModalOpen(true);
+                              }}
+                              style={{ background: 'none', border: '1px solid var(--border-color)', borderRadius: '4px', padding: '0.25rem 0.5rem', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '0.75rem' }}
+                            >Editar</button>
+                          </div>
                         ) : (
                           <span className={styles.paidBadge}>✓ Pagado</span>
                         )}
@@ -253,10 +316,20 @@ export default function DebtsPage() {
         <div className={styles.modalOverlay}>
           <div className={`card ${styles.modal}`}>
             <h3 className="h3">Pagar Cuota {selectedInstallment.installment_number}</h3>
-            <p className="text-secondary" style={{fontSize: '0.875rem', marginTop: '-1rem'}}>
-              Se registrará un egreso por {formatCurrency(selectedInstallment.amount)}.
+            <p className="text-secondary" style={{fontSize: '0.875rem', marginTop: '-1rem', marginBottom: '1rem'}}>
+              Monto original: {formatCurrency(selectedInstallment.amount)}. Si pagas más o menos de este monto, la diferencia se descontará de la última cuota pendiente de la deuda.
             </p>
             <form onSubmit={handlePayInstallment} className={styles.form}>
+              <div className="input-group">
+                <label className="input-label">Monto real a pagar</label>
+                <input 
+                  type="number" 
+                  className="input-field" 
+                  value={payAmount} 
+                  onChange={e => setPayAmount(e.target.value)} 
+                  required 
+                />
+              </div>
               <div className="input-group">
                 <label className="input-label">¿Desde qué cuenta quieres pagar?</label>
                 <select className="input-field" value={payAccountId} onChange={e => setPayAccountId(e.target.value)} required>
@@ -267,6 +340,30 @@ export default function DebtsPage() {
               <div className={styles.modalActions}>
                 <button type="button" className="btn-secondary" onClick={() => setIsPayModalOpen(false)}>Cancelar</button>
                 <button type="submit" className="btn-primary">Confirmar Pago</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {isEditInstModalOpen && selectedEditInst && (
+        <div className={styles.modalOverlay}>
+          <div className={`card ${styles.modal}`}>
+            <h3 className="h3">Editar Cuota {selectedEditInst.installment_number}</h3>
+            <form onSubmit={handleEditInstallment} className={styles.form}>
+              <div className="input-group">
+                <label className="input-label">Nuevo monto planificado</label>
+                <input 
+                  type="number" 
+                  className="input-field" 
+                  value={editInstAmount} 
+                  onChange={e => setEditInstAmount(e.target.value)} 
+                  required 
+                />
+              </div>
+              <div className={styles.modalActions}>
+                <button type="button" className="btn-secondary" onClick={() => setIsEditInstModalOpen(false)}>Cancelar</button>
+                <button type="submit" className="btn-primary">Guardar</button>
               </div>
             </form>
           </div>
