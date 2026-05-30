@@ -217,11 +217,18 @@ export default function AccountsPage() {
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.875rem' }}>
                             <span style={{ fontWeight: 600 }}>{b.name}</span>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                              <span>
-                                {isVariable 
-                                  ? `Gastado este mes: ${formatCurrency(b.spent)}`
-                                  : `${formatCurrency(b.spent)} / ${formatCurrency(b.amount)}`}
-                              </span>
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                                <span>
+                                  {isVariable 
+                                    ? `Gastado este mes: ${formatCurrency(b.spent)}`
+                                    : `${formatCurrency(b.spent)} / ${formatCurrency(b.amount)}`}
+                                </span>
+                                {!isVariable && !isOverBudget && (
+                                  <span style={{ fontSize: '0.75rem', color: 'var(--success-text, #10b981)', fontWeight: 500, marginTop: '0.125rem' }}>
+                                    Quedan: {formatCurrency(b.amount - b.spent)}
+                                  </span>
+                                )}
+                              </div>
                               <button 
                                 onClick={() => openEditBudgetModal(b)}
                                 style={{ background: 'none', border: 'none', color: 'var(--accent-color)', cursor: 'pointer', fontSize: '1rem', padding: '0.2rem' }}

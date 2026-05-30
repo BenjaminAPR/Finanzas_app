@@ -129,6 +129,21 @@ export default function DebtsPage() {
     }
   }
 
+  async function handleDeleteDebt(debtId: string) {
+    if (!confirm('¿Estás seguro de que deseas eliminar esta deuda y todas sus cuotas?')) return;
+    try {
+      // Intentamos eliminar primero las cuotas (por si acaso no hay borrado en cascada)
+      await supabase.from('installments').delete().eq('debt_id', debtId);
+      const { error } = await supabase.from('debts').delete().eq('id', debtId);
+      
+      if (error) throw error;
+      loadData();
+    } catch (err) {
+      console.error(err);
+      alert('Error al eliminar la deuda');
+    }
+  }
+
   const formatCurrency = (val: number) => `$${val.toLocaleString('es-CL')}`;
 
   if (loading) return <div className={styles.loading}>Cargando deudas...</div>;
@@ -157,7 +172,16 @@ export default function DebtsPage() {
               <div key={debt.id} className={`card ${styles.debtCard}`}>
                 <div className={styles.cardHeader}>
                   <h3 className="h3">{debt.name}</h3>
-                  <div className={styles.total}>{formatCurrency(debt.total_amount)}</div>
+                  <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                    <div className={styles.total}>{formatCurrency(debt.total_amount)}</div>
+                    <button 
+                      onClick={() => handleDeleteDebt(debt.id)}
+                      style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', fontSize: '1.25rem', padding: '0.25rem' }}
+                      title="Eliminar deuda"
+                    >
+                      🗑️
+                    </button>
+                  </div>
                 </div>
                 
                 <div className={styles.progressContainer}>
