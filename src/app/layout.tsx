@@ -12,7 +12,7 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-import type { Metadata, Viewport } from "next";
+import type { Viewport } from "next";
 
 export const metadata: Metadata = {
   title: "Finanzas Hogar",
