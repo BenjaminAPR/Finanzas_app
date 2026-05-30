@@ -28,13 +28,35 @@ export default function TransactionsPage() {
   async function loadData() {
     try {
       setLoading(true);
-      const [transRes, accRes, budgRes] = await Promise.all([
-        supabase.from('transactions').select(`*, profiles(full_name), accounts!transactions_account_id_fkey(name), dest_account:accounts!transactions_destination_account_id_fkey(name), budgets(name)`).order('date', { ascending: false }),
+      const [transRes, accRes, budgRes, profRes] = await Promise.all([
+        supabase.from('transactions').select('*').order('date', { ascending: false }),
         supabase.from('accounts').select('*'),
-        supabase.from('budgets').select('*')
+        supabase.from('budgets').select('*'),
+        supabase.from('profiles').select('*')
       ]);
 
-      if (transRes.data) setTransactions(transRes.data);
+      if (transRes.error) {
+        console.error('Error fetching transactions:', transRes.error);
+      }
+
+      if (transRes.data) {
+        const enrichedTransactions = transRes.data.map(t => {
+          const account = accRes.data?.find(a => a.id === t.account_id);
+          const destAccount = accRes.data?.find(a => a.id === t.destination_account_id);
+          const budget = budgRes.data?.find(b => b.id === t.budget_id);
+          const profile = profRes.data?.find(p => p.id === t.user_id);
+          
+          return {
+            ...t,
+            accounts: account ? { name: account.name } : null,
+            dest_account: destAccount ? { name: destAccount.name } : null,
+            budgets: budget ? { name: budget.name } : null,
+            profiles: profile ? { full_name: profile.full_name } : null
+          };
+        });
+        setTransactions(enrichedTransactions);
+      }
+      
       if (accRes.data) {
         setAccounts(accRes.data);
         if (accRes.data.length > 0) setAccountId(accRes.data[0].id);
