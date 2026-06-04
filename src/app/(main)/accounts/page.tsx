@@ -57,11 +57,7 @@ export default function AccountsPage() {
           let spent = 0;
           if (txData) {
             txData.forEach(tx => {
-              const txDate = new Date(tx.date);
-              // Los presupuestos fijos/variables se calculan sumando solo los gastos del mes actual
-              const isCurrentMonth = txDate.getMonth() === currentMonth && txDate.getFullYear() === currentYear;
-              
-              if (isCurrentMonth && tx.type === 'expense' && tx.budget_id === b.id) {
+              if (tx.type === 'expense' && tx.budget_id === b.id) {
                 spent += tx.amount;
               }
             });
@@ -220,7 +216,7 @@ export default function AccountsPage() {
                               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                                 <span>
                                   {isVariable 
-                                    ? `Gastado este mes: ${formatCurrency(b.spent)}`
+                                    ? `Gastado: ${formatCurrency(b.spent)}`
                                     : `${formatCurrency(b.spent)} / ${formatCurrency(b.amount)}`}
                                 </span>
                                 {!isVariable && !isOverBudget && (
@@ -243,7 +239,7 @@ export default function AccountsPage() {
                               <div style={{ height: '6px', background: 'var(--border-color)', borderRadius: '3px', overflow: 'hidden' }}>
                                 <div style={{ height: '100%', width: `${progress}%`, background: isOverBudget ? 'var(--danger)' : 'var(--accent-color)' }}></div>
                               </div>
-                              {isOverBudget && <span style={{ fontSize: '0.75rem', color: 'var(--danger)' }}>¡Presupuesto excedido este mes!</span>}
+                              {isOverBudget && <span style={{ fontSize: '0.75rem', color: 'var(--danger)' }}>¡Presupuesto excedido!</span>}
                             </>
                           )}
                           {isVariable && (
