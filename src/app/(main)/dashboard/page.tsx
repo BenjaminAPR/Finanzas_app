@@ -42,8 +42,9 @@ export default function DashboardPage() {
         const { data: installmentsData } = await supabase.from('installments').select('*').eq('status', 'pending');
 
         const now = new Date();
-        const currentMonth = now.getMonth();
-        const currentYear = now.getFullYear();
+        const sortedTx = transactionsData ? [...transactionsData].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()) : [];
+        const lastReset = sortedTx.find(tx => tx.description === '🔄 Cierre de Mes');
+        const cycleStartDate = lastReset ? new Date(lastReset.created_at) : new Date(0);
 
         let globalBalance = 0;
         let globalTithe = 0;
@@ -55,8 +56,7 @@ export default function DashboardPage() {
 
         if (transactionsData) {
           transactionsData.forEach(tx => {
-            const txDate = new Date(tx.date || tx.created_at);
-            const isCurrentMonth = txDate.getMonth() === currentMonth && txDate.getFullYear() === currentYear;
+            const isCurrentCycle = new Date(tx.created_at) > cycleStartDate && tx.description !== '🔄 Cierre de Mes';
 
             // Calcular Diezmo separado
             if (tx.is_tithe && tx.type === 'income') {
@@ -80,8 +80,8 @@ export default function DashboardPage() {
               if (destAcc) destAcc.balance += tx.amount;
             }
 
-            // Analytics del mes actual
-            if (isCurrentMonth) {
+            // Analytics del ciclo actual
+            if (isCurrentCycle) {
               if (tx.type === 'income' && !tx.is_tithe) monthIncome += tx.amount;
               if (tx.type === 'expense') {
                 monthExpense += tx.amount;
@@ -132,6 +132,28 @@ export default function DashboardPage() {
     }
   }
 
+  async function handleCloseMonth() {
+    if (!window.confirm('¿Estás seguro de que quieres cerrar el mes? Esto reiniciará tus presupuestos y gráficos a $0 para comenzar un nuevo ciclo. Tus saldos bancarios y tu historial quedarán intactos.')) return;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      
+      const { error } = await supabase.from('transactions').insert({
+        type: 'expense',
+        amount: 0,
+        description: '🔄 Cierre de Mes',
+        date: new Date().toISOString().split('T')[0],
+        user_id: user.id
+      });
+      if (error) throw error;
+      
+      loadData();
+    } catch (err) {
+      console.error(err);
+      alert('Error al cerrar el mes');
+    }
+  }
+
   const formatCurrency = (val: number) => `$${val.toLocaleString('es-CL')}`;
 
   if (loading) return <div className={styles.loading}>Cargando panel...</div>;
@@ -143,9 +165,17 @@ export default function DashboardPage() {
           <h1 className="h2">Hola, {profile?.full_name || 'Usuario'} 👋</h1>
           <p className="text-secondary">Aquí está el resumen financiero de tu hogar.</p>
         </div>
-        <button className="btn-primary" onClick={() => window.location.href = '/transactions'}>
-          <span>+</span> Registrar Movimiento
-        </button>
+        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <button 
+            onClick={handleCloseMonth}
+            style={{ background: 'transparent', border: '1px solid var(--border-color)', borderRadius: '0.75rem', padding: '0.75rem 1rem', color: 'var(--text-secondary)', cursor: 'pointer', fontWeight: 500 }}
+          >
+            🔄 Cerrar Mes
+          </button>
+          <button className="btn-primary" onClick={() => window.location.href = '/transactions'}>
+            <span>+</span> Movimiento
+          </button>
+        </div>
       </header>
 
       <div className={styles.grid}>

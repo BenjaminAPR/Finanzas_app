@@ -35,9 +35,9 @@ export default function AccountsPage() {
 
       const { data: txData } = await supabase.from('transactions').select('*');
 
-      const now = new Date();
-      const currentMonth = now.getMonth();
-      const currentYear = now.getFullYear();
+      const sortedTx = txData ? [...txData].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()) : [];
+      const lastReset = sortedTx.find(tx => tx.description === '🔄 Cierre de Mes');
+      const cycleStartDate = lastReset ? new Date(lastReset.created_at) : new Date(0);
 
       let processedAccounts = accData?.map(acc => {
         let balance = 0;
@@ -57,12 +57,11 @@ export default function AccountsPage() {
           let spent = 0;
           if (txData) {
             txData.forEach(tx => {
-              const txDate = new Date(tx.date || tx.created_at);
+              const isCurrentCycle = new Date(tx.created_at) > cycleStartDate && tx.description !== '🔄 Cierre de Mes';
               if (
                 tx.type === 'expense' && 
                 tx.budget_id === b.id &&
-                txDate.getMonth() === currentMonth &&
-                txDate.getFullYear() === currentYear
+                isCurrentCycle
               ) {
                 spent += tx.amount;
               }
