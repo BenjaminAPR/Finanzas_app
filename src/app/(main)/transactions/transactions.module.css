@@ -177,3 +177,20 @@
   gap: 1rem;
   margin-top: 1rem;
 }
+
+.deleteBtn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  transition: all 0.2s ease;
+  font-size: 1.1rem;
+  opacity: 0.7;
+}
+
+.deleteBtn:hover {
+  background: rgba(239, 68, 68, 0.1);
+  opacity: 1;
+  transform: scale(1.1);
+}

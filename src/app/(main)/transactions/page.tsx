@@ -107,6 +107,18 @@ export default function TransactionsPage() {
     }
   }
 
+  async function handleDeleteTransaction(id: string) {
+    if (!window.confirm('¿Estás seguro de que quieres eliminar este movimiento?')) return;
+    try {
+      const { error } = await supabase.from('transactions').delete().eq('id', id);
+      if (error) throw error;
+      loadData();
+    } catch (err) {
+      console.error(err);
+      alert('Error al eliminar el movimiento');
+    }
+  }
+
   const formatCurrency = (val: number) => `$${val.toLocaleString('es-CL')}`;
 
   if (loading) return <div className={styles.loading}>Cargando movimientos...</div>;
@@ -136,6 +148,7 @@ export default function TransactionsPage() {
                 <th>Cuenta</th>
                 <th>Usuario</th>
                 <th className={styles.alignRight}>Monto</th>
+                <th className={styles.alignRight}>Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -160,6 +173,15 @@ export default function TransactionsPage() {
                   <td className="text-secondary">{t.profiles?.full_name || 'Usuario'}</td>
                   <td className={`${styles.alignRight} ${t.type === 'expense' ? styles.negative : styles.positive}`}>
                     {t.type === 'expense' ? '-' : '+'}{formatCurrency(t.amount)}
+                  </td>
+                  <td className={styles.alignRight}>
+                    <button 
+                      onClick={() => handleDeleteTransaction(t.id)} 
+                      className={styles.deleteBtn}
+                      title="Eliminar movimiento"
+                    >
+                      🗑️
+                    </button>
                   </td>
                 </tr>
               ))}
