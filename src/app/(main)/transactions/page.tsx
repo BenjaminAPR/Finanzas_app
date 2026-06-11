@@ -11,6 +11,10 @@ export default function TransactionsPage() {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  // Filters
+  const [filterAccountId, setFilterAccountId] = useState('');
+  const [filterBudgetId, setFilterBudgetId] = useState('');
+
   // Form State
   const [type, setType] = useState('expense');
   const [amount, setAmount] = useState('');
@@ -22,6 +26,14 @@ export default function TransactionsPage() {
   const [isTithe, setIsTithe] = useState(false);
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const accountParam = urlParams.get('account');
+      const budgetParam = urlParams.get('budget');
+      if (accountParam) setFilterAccountId(accountParam);
+      if (budgetParam) setFilterBudgetId(budgetParam);
+    }
+    
     loadData();
   }, []);
 
@@ -134,6 +146,22 @@ export default function TransactionsPage() {
         </button>
       </header>
 
+      <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+        <select className="input-field" style={{ width: 'auto', minWidth: '200px', padding: '0.5rem 1rem' }} value={filterAccountId} onChange={e => setFilterAccountId(e.target.value)}>
+          <option value="">Todas las Cuentas</option>
+          {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.name}</option>)}
+        </select>
+        <select className="input-field" style={{ width: 'auto', minWidth: '200px', padding: '0.5rem 1rem' }} value={filterBudgetId} onChange={e => setFilterBudgetId(e.target.value)}>
+          <option value="">Todos los Presupuestos</option>
+          {budgets.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+        </select>
+        {(filterAccountId || filterBudgetId) && (
+          <button className="btn-secondary" style={{ padding: '0.5rem 1rem' }} onClick={() => { setFilterAccountId(''); setFilterBudgetId(''); }}>
+            Limpiar Filtros
+          </button>
+        )}
+      </div>
+
       <div className={`card ${styles.tableCard}`}>
         {transactions.length === 0 ? (
           <div className={styles.emptyState}>No hay movimientos registrados.</div>
@@ -151,7 +179,11 @@ export default function TransactionsPage() {
               </tr>
             </thead>
             <tbody>
-              {transactions.map(t => (
+              {transactions.filter(t => {
+                if (filterAccountId && t.account_id !== filterAccountId && t.destination_account_id !== filterAccountId) return false;
+                if (filterBudgetId && t.budget_id !== filterBudgetId) return false;
+                return true;
+              }).map(t => (
                 <tr key={t.id}>
                   <td>{new Date(t.date).toLocaleDateString('es-CL')}</td>
                   <td>

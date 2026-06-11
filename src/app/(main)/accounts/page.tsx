@@ -1,10 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import styles from './accounts.module.css';
 
 export default function AccountsPage() {
+  const router = useRouter();
   const [accounts, setAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -183,7 +185,12 @@ export default function AccountsPage() {
             <div key={account.id} className={`card ${styles.accountCard}`}>
               <div className={styles.cardHeader}>
                 <div>
-                  <h3 className="h3">{account.name}</h3>
+                  <h3 className="h3" style={{display: 'flex', alignItems: 'center', gap: '0.75rem'}}>
+                    {account.name}
+                    <button onClick={() => router.push(`/transactions?account=${account.id}`)} className="btn-secondary" style={{padding: '0.2rem 0.5rem', fontSize: '0.75rem', borderRadius: '6px', background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-secondary)'}} title="Ver movimientos">
+                      🔍 Ver
+                    </button>
+                  </h3>
                   <span className={styles.badge}>{account.type}</span>
                 </div>
                 <div className={styles.balance}>
@@ -215,7 +222,12 @@ export default function AccountsPage() {
                       return (
                         <div key={b.id} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', padding: '0.75rem', background: 'var(--bg-primary)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.875rem' }}>
-                            <span style={{ fontWeight: 600 }}>{b.name}</span>
+                            <span style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              {b.name}
+                              <button onClick={() => router.push(`/transactions?budget=${b.id}`)} style={{padding: '0.2rem', fontSize: '0.875rem', borderRadius: '4px', background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer'}} title="Ver movimientos">
+                                🔍
+                              </button>
+                            </span>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                                 <span>
