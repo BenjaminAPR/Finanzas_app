@@ -25,7 +25,6 @@ export default function AccountsPage() {
 
   async function loadAccounts() {
     try {
-      setLoading(true);
       const { data: accData, error } = await supabase
         .from('accounts')
         .select(`*, budgets(*)`)

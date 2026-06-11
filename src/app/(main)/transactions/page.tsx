@@ -27,7 +27,6 @@ export default function TransactionsPage() {
 
   async function loadData() {
     try {
-      setLoading(true);
       const [transRes, accRes, budgRes, profRes] = await Promise.all([
         supabase.from('transactions').select('*').order('created_at', { ascending: false }),
         supabase.from('accounts').select('*'),

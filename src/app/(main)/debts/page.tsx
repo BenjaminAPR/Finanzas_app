@@ -31,7 +31,6 @@ export default function DebtsPage() {
 
   async function loadData() {
     try {
-      setLoading(true);
       const [debtsRes, accountsRes] = await Promise.all([
         supabase.from('debts').select(`*, installments(*)`).order('created_at', { ascending: false }),
         supabase.from('accounts').select('*')

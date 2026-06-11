@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import styles from './dashboard.module.css';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
@@ -8,6 +9,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, B
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<any>(null);
   const [totalBalance, setTotalBalance] = useState(0);
@@ -172,7 +174,7 @@ export default function DashboardPage() {
           >
             🔄 Cerrar Mes
           </button>
-          <button className="btn-primary" onClick={() => window.location.href = '/transactions'}>
+          <button className="btn-primary" onClick={() => router.push('/transactions')}>
             <span>+</span> Movimiento
           </button>
         </div>
