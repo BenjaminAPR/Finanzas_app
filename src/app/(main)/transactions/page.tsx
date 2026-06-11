@@ -146,17 +146,17 @@ export default function TransactionsPage() {
         </button>
       </header>
 
-      <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-        <select className="input-field" style={{ width: 'auto', minWidth: '200px', padding: '0.5rem 1rem' }} value={filterAccountId} onChange={e => setFilterAccountId(e.target.value)}>
+      <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+        <select className="input-field" style={{ flex: '1 1 200px', padding: '0.5rem 1rem' }} value={filterAccountId} onChange={e => setFilterAccountId(e.target.value)}>
           <option value="">Todas las Cuentas</option>
           {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.name}</option>)}
         </select>
-        <select className="input-field" style={{ width: 'auto', minWidth: '200px', padding: '0.5rem 1rem' }} value={filterBudgetId} onChange={e => setFilterBudgetId(e.target.value)}>
+        <select className="input-field" style={{ flex: '1 1 200px', padding: '0.5rem 1rem' }} value={filterBudgetId} onChange={e => setFilterBudgetId(e.target.value)}>
           <option value="">Todos los Presupuestos</option>
           {budgets.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
         </select>
         {(filterAccountId || filterBudgetId) && (
-          <button className="btn-secondary" style={{ padding: '0.5rem 1rem' }} onClick={() => { setFilterAccountId(''); setFilterBudgetId(''); }}>
+          <button className="btn-secondary" style={{ flex: '1 1 100%', padding: '0.5rem 1rem' }} onClick={() => { setFilterAccountId(''); setFilterBudgetId(''); }}>
             Limpiar Filtros
           </button>
         )}
