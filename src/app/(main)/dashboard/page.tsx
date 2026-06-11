@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase';
 import styles from './dashboard.module.css';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
 
-const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
+const COLORS = ['#52525b', '#71717a', '#a1a1aa', '#d4d4d8', '#e4e4e7', '#f4f4f5', '#27272a', '#3f3f46'];
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -255,8 +255,8 @@ export default function DashboardPage() {
                 <YAxis stroke="var(--text-secondary)" tickFormatter={(value) => `$${value/1000}k`} />
                 <RechartsTooltip formatter={(value: any) => formatCurrency(Number(value))} cursor={{fill: 'rgba(0,0,0,0.05)'}} />
                 <Legend />
-                <Bar dataKey="Ingresos" fill="#10b981" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Gastos" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Ingresos" fill="var(--success)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Gastos" fill="var(--danger)" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

@@ -83,13 +83,13 @@
 }
 
 .navItem:hover {
-  background: rgba(59, 130, 246, 0.05);
-  color: var(--accent-color);
+  background: var(--bg-primary); /* Or subtle border/bg depending on what looks best, maybe just invert */
+  color: var(--text-primary);
 }
 
 .navItem.active {
-  background: rgba(59, 130, 246, 0.1);
-  color: var(--accent-color);
+  background: var(--text-primary);
+  color: var(--bg-primary);
 }
 
 .icon {

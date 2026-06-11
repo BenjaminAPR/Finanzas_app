@@ -78,9 +78,9 @@
 }
 
 .badgeTithe {
-  background: rgba(139, 92, 246, 0.1);
-  color: #8b5cf6;
-  border-color: rgba(139, 92, 246, 0.2);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-color: var(--text-primary);
   margin-left: 0.5rem;
 }
 
@@ -91,9 +91,9 @@
   font-weight: 600;
 }
 
-.income { background: rgba(16, 185, 129, 0.1); color: var(--success); }
-.expense { background: rgba(239, 68, 68, 0.1); color: var(--danger); }
-.transfer { background: rgba(59, 130, 246, 0.1); color: var(--accent-color); }
+.income { background: rgba(5, 150, 105, 0.1); color: var(--success); }
+.expense { background: rgba(220, 38, 38, 0.1); color: var(--danger); }
+.transfer { background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color); }
 
 .emptyState {
   padding: 4rem;
@@ -159,9 +159,9 @@
   transition: all 0.2s;
 }
 
-.activeExpense { background: rgba(239, 68, 68, 0.1); color: var(--danger); }
-.activeIncome { background: rgba(16, 185, 129, 0.1); color: var(--success); }
-.activeTransfer { background: rgba(59, 130, 246, 0.1); color: var(--accent-color); }
+.activeExpense { background: rgba(220, 38, 38, 0.1); color: var(--danger); }
+.activeIncome { background: rgba(5, 150, 105, 0.1); color: var(--success); }
+.activeTransfer { background: var(--text-primary); color: var(--bg-primary); }
 
 .checkboxGroup {
   display: flex;

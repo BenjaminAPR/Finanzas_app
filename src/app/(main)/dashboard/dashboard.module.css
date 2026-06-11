@@ -40,13 +40,7 @@
 
 .mainCard {
   grid-column: span 8;
-  background: var(--accent-gradient);
-  color: white;
-  border: none;
-}
-
-.mainCard .h3, .mainCard .text-secondary {
-  color: rgba(255, 255, 255, 0.9);
+  /* Minimalist main card */
 }
 
 .titheCard {
@@ -55,8 +49,7 @@
 
 .projectionCard {
   grid-column: span 12;
-  background: rgba(16, 185, 129, 0.05); /* Greenish tint */
-  border: 1px solid rgba(16, 185, 129, 0.2);
+  border: 1px dashed var(--border-color); /* Subtle distinction */
 }
 
 .chartCard {
@@ -94,7 +87,7 @@
 
 .titheCard .amount {
   font-size: 2.5rem;
-  color: var(--accent-color);
+  color: var(--text-primary);
 }
 
 .cardFooter {
@@ -104,7 +97,9 @@
 }
 
 .trend {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
   padding: 0.25rem 0.75rem;
   border-radius: 999px;
 }
