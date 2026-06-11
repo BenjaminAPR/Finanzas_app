@@ -57,7 +57,13 @@ export default function AccountsPage() {
           let spent = 0;
           if (txData) {
             txData.forEach(tx => {
-              if (tx.type === 'expense' && tx.budget_id === b.id) {
+              const txDate = new Date(tx.date || tx.created_at);
+              if (
+                tx.type === 'expense' && 
+                tx.budget_id === b.id &&
+                txDate.getMonth() === currentMonth &&
+                txDate.getFullYear() === currentYear
+              ) {
                 spent += tx.amount;
               }
             });

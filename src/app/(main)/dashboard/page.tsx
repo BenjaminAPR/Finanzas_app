@@ -3,6 +3,9 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import styles from './dashboard.module.css';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
+
+const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
@@ -10,6 +13,11 @@ export default function DashboardPage() {
   const [totalBalance, setTotalBalance] = useState(0);
   const [tithe, setTithe] = useState(0);
   const [accounts, setAccounts] = useState<any[]>([]);
+  
+  // Analytics State
+  const [pieData, setPieData] = useState<any[]>([]);
+  const [barData, setBarData] = useState<any[]>([]);
+  const [projectedExpenses, setProjectedExpenses] = useState(0);
 
   useEffect(() => {
     loadData();
@@ -27,16 +35,29 @@ export default function DashboardPage() {
           .single();
         if (profileData) setProfile(profileData);
 
-        // Cargar cuentas y sus balances reales
+        // Cargar cuentas, transacciones, presupuestos y cuotas pendientes
         const { data: accountsData } = await supabase.from('accounts').select('*');
         const { data: transactionsData } = await supabase.from('transactions').select('*');
+        const { data: budgetsData } = await supabase.from('budgets').select('*');
+        const { data: installmentsData } = await supabase.from('installments').select('*').eq('status', 'pending');
+
+        const now = new Date();
+        const currentMonth = now.getMonth();
+        const currentYear = now.getFullYear();
 
         let globalBalance = 0;
         let globalTithe = 0;
         let processedAccounts = accountsData?.map(acc => ({...acc, balance: 0})) || [];
+        
+        let monthIncome = 0;
+        let monthExpense = 0;
+        let budgetExpenses: Record<string, number> = {};
 
         if (transactionsData) {
           transactionsData.forEach(tx => {
+            const txDate = new Date(tx.date || tx.created_at);
+            const isCurrentMonth = txDate.getMonth() === currentMonth && txDate.getFullYear() === currentYear;
+
             // Calcular Diezmo separado
             if (tx.is_tithe && tx.type === 'income') {
               globalTithe += tx.amount;
@@ -44,7 +65,7 @@ export default function DashboardPage() {
               globalTithe -= tx.amount;
             }
 
-            // Calcular balance global (sólo ingresos y egresos, transferencias no cambian el total global)
+            // Calcular balance global
             if (tx.type === 'income') globalBalance += tx.amount;
             if (tx.type === 'expense') globalBalance -= tx.amount;
 
@@ -52,15 +73,53 @@ export default function DashboardPage() {
             const originAcc = processedAccounts.find(a => a.id === tx.account_id);
             const destAcc = processedAccounts.find(a => a.id === tx.destination_account_id);
 
-            if (tx.type === 'income' && originAcc) originAcc.balance += tx.amount; // En DB guardamos income apuntando a account_id como destino
+            if (tx.type === 'income' && originAcc) originAcc.balance += tx.amount; 
             if (tx.type === 'expense' && originAcc) originAcc.balance -= tx.amount;
-            
             if (tx.type === 'transfer') {
               if (originAcc) originAcc.balance -= tx.amount;
               if (destAcc) destAcc.balance += tx.amount;
             }
+
+            // Analytics del mes actual
+            if (isCurrentMonth) {
+              if (tx.type === 'income' && !tx.is_tithe) monthIncome += tx.amount;
+              if (tx.type === 'expense') {
+                monthExpense += tx.amount;
+                if (tx.budget_id) {
+                  budgetExpenses[tx.budget_id] = (budgetExpenses[tx.budget_id] || 0) + tx.amount;
+                }
+              }
+            }
           });
         }
+
+        // Construir datos para gráficos
+        const newPieData = budgetsData?.filter(b => budgetExpenses[b.id] > 0).map(b => ({
+          name: b.name,
+          value: budgetExpenses[b.id]
+        })) || [];
+        setPieData(newPieData);
+
+        setBarData([
+          { name: 'Este Mes', Ingresos: monthIncome, Gastos: monthExpense }
+        ]);
+
+        // Proyección: Presupuestos fijos + próxima cuota de cada deuda
+        let projection = 0;
+        if (budgetsData) {
+          projection += budgetsData.reduce((acc, b) => acc + (b.amount || 0), 0);
+        }
+        if (installmentsData) {
+          // Agrupar por deuda y buscar la cuota con el número menor (la próxima)
+          const nextInstallments: Record<string, number> = {};
+          installmentsData.forEach(inst => {
+            if (!nextInstallments[inst.debt_id] || inst.installment_number < nextInstallments[inst.debt_id]) {
+              nextInstallments[inst.debt_id] = inst.amount; // Guardar monto de la cuota más próxima
+            }
+          });
+          projection += Object.values(nextInstallments).reduce((acc: number, val: number) => acc + val, 0);
+        }
+        setProjectedExpenses(projection);
 
         setAccounts(processedAccounts);
         setTotalBalance(globalBalance);
@@ -110,6 +169,65 @@ export default function DashboardPage() {
           <p className="text-secondary" style={{ marginTop: '0.5rem', fontSize: '0.875rem' }}>
             Fondo separado de ingresos.
           </p>
+        </div>
+
+        <div className={`card ${styles.projectionCard}`}>
+          <div className={styles.titheHeader}>
+            <h3 className="h3">Proyección Próximo Mes</h3>
+          </div>
+          <div className={styles.amount}>
+            {formatCurrency(projectedExpenses)}
+          </div>
+          <p className="text-secondary" style={{ marginTop: '0.5rem', fontSize: '0.875rem' }}>
+            Suma de tus presupuestos fijos y cuotas de deuda pendientes.
+          </p>
+        </div>
+
+        <div className={`card ${styles.chartCard}`}>
+          <h3 className="h3" style={{ marginBottom: '1.5rem' }}>Gastos por Presupuesto (Este mes)</h3>
+          <div style={{ height: 300 }}>
+            {pieData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={100}
+                    fill="#8884d8"
+                    paddingAngle={5}
+                    dataKey="value"
+                  >
+                    {pieData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip formatter={(value: any) => formatCurrency(Number(value))} />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className={styles.emptyState}>No hay gastos en presupuestos este mes.</div>
+            )}
+          </div>
+        </div>
+
+        <div className={`card ${styles.chartCard}`}>
+          <h3 className="h3" style={{ marginBottom: '1.5rem' }}>Flujo de Caja (Este mes)</h3>
+          <div style={{ height: 300 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={barData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-color)" />
+                <XAxis dataKey="name" stroke="var(--text-secondary)" />
+                <YAxis stroke="var(--text-secondary)" tickFormatter={(value) => `$${value/1000}k`} />
+                <RechartsTooltip formatter={(value: any) => formatCurrency(Number(value))} cursor={{fill: 'rgba(0,0,0,0.05)'}} />
+                <Legend />
+                <Bar dataKey="Ingresos" fill="#10b981" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Gastos" fill="#ef4444" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
 
         <div className={`card ${styles.accountsCard}`}>
