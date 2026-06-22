@@ -41,11 +41,10 @@
 }
 
 .mainCard {
-  grid-column: span 8;
-  /* Minimalist main card */
+  grid-column: span 4;
 }
 
-.titheCard {
+.titheCard, .savingsCard {
   grid-column: span 4;
 }
 

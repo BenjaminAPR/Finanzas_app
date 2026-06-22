@@ -16,6 +16,11 @@ export default function DashboardPage() {
   const [tithe, setTithe] = useState(0);
   const [accounts, setAccounts] = useState<any[]>([]);
   
+  // Savings State
+  const [savingsAccount, setSavingsAccount] = useState<any>(null);
+  const [showSavingsInput, setShowSavingsInput] = useState(false);
+  const [savingsAmount, setSavingsAmount] = useState('');
+  
   // Analytics State
   const [pieData, setPieData] = useState<any[]>([]);
   const [barData, setBarData] = useState<any[]>([]);
@@ -124,6 +129,10 @@ export default function DashboardPage() {
         setProjectedExpenses(projection);
 
         setAccounts(processedAccounts);
+        
+        const savingsAcc = processedAccounts.find(a => a.type === 'Cuenta de Ahorro');
+        setSavingsAccount(savingsAcc || null);
+        
         setTotalBalance(globalBalance);
         setTithe(globalTithe);
       }
@@ -153,6 +162,49 @@ export default function DashboardPage() {
     } catch (err) {
       console.error(err);
       alert('Error al cerrar el mes');
+    }
+  }
+
+  async function handleCreateSavingsWallet() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { error } = await supabase.from('accounts').insert({
+        name: 'Wallet de Ahorros',
+        type: 'Cuenta de Ahorro',
+        user_id: user.id
+      });
+      if (error) throw error;
+      loadData();
+    } catch (err) {
+      console.error(err);
+      alert('Error creando wallet de ahorros');
+    }
+  }
+
+  async function handleAddSavings(e: React.FormEvent) {
+    e.preventDefault();
+    if (!savingsAccount || !savingsAmount) return;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      
+      const { error } = await supabase.from('transactions').insert({
+        type: 'income',
+        amount: parseFloat(savingsAmount),
+        description: 'Ingreso a Ahorros',
+        date: new Date().toISOString().split('T')[0],
+        account_id: savingsAccount.id,
+        user_id: user.id
+      });
+      if (error) throw error;
+      
+      setSavingsAmount('');
+      setShowSavingsInput(false);
+      loadData();
+    } catch (err) {
+      console.error(err);
+      alert('Error agregando ahorro');
     }
   }
 
@@ -201,6 +253,33 @@ export default function DashboardPage() {
           <p className="text-secondary" style={{ marginTop: '0.5rem', fontSize: '0.875rem' }}>
             Fondo separado de ingresos.
           </p>
+        </div>
+
+        <div className={`card ${styles.savingsCard}`}>
+          <div className={styles.titheHeader}>
+            <h3 className="h3">Wallet de Ahorros</h3>
+          </div>
+          {!savingsAccount ? (
+             <div style={{ marginTop: '1rem' }}>
+               <p className="text-secondary" style={{ fontSize: '0.875rem', marginBottom: '1rem' }}>Cuenta única para separar y guardar tu dinero a futuro.</p>
+               <button className="btn-secondary" onClick={handleCreateSavingsWallet} style={{ width: '100%', padding: '0.5rem' }}>Activar Wallet</button>
+             </div>
+          ) : (
+             <>
+               <div className={styles.amount}>
+                 {formatCurrency(savingsAccount.balance)}
+               </div>
+               {!showSavingsInput ? (
+                 <button className="btn-secondary" onClick={() => setShowSavingsInput(true)} style={{ width: '100%', padding: '0.5rem', fontSize: '0.875rem' }}>+ Ingresar Ahorro</button>
+               ) : (
+                 <form onSubmit={handleAddSavings} style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                   <input type="number" className="input-field" placeholder="Monto" value={savingsAmount} onChange={e => setSavingsAmount(e.target.value)} required style={{ padding: '0.5rem', fontSize: '0.875rem', flex: 1 }} autoFocus />
+                   <button type="submit" className="btn-primary" style={{ padding: '0.5rem 1rem', fontSize: '0.875rem' }}>Guardar</button>
+                   <button type="button" className="btn-secondary" onClick={() => setShowSavingsInput(false)} style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem' }}>✕</button>
+                 </form>
+               )}
+             </>
+          )}
         </div>
 
         <div className={`card ${styles.projectionCard}`}>
