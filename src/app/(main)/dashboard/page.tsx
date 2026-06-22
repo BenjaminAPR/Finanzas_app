@@ -13,7 +13,6 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<any>(null);
   const [totalBalance, setTotalBalance] = useState(0);
-  const [tithe, setTithe] = useState(0);
   const [accounts, setAccounts] = useState<any[]>([]);
   
   // Savings State
@@ -54,7 +53,6 @@ export default function DashboardPage() {
         const cycleStartDate = lastReset ? new Date(lastReset.created_at) : new Date(0);
 
         let globalBalance = 0;
-        let globalTithe = 0;
         let processedAccounts = accountsData?.map(acc => ({...acc, balance: 0})) || [];
         
         let monthIncome = 0;
@@ -64,13 +62,6 @@ export default function DashboardPage() {
         if (transactionsData) {
           transactionsData.forEach(tx => {
             const isCurrentCycle = new Date(tx.created_at) > cycleStartDate && tx.description !== '🔄 Cierre de Mes';
-
-            // Calcular Diezmo separado
-            if (tx.is_tithe && tx.type === 'income') {
-              globalTithe += tx.amount;
-            } else if (tx.is_tithe && tx.type === 'expense') {
-              globalTithe -= tx.amount;
-            }
 
             // Calcular balance global
             if (tx.type === 'income') globalBalance += tx.amount;
@@ -134,7 +125,6 @@ export default function DashboardPage() {
         setSavingsAccount(savingsAcc || null);
         
         setTotalBalance(globalBalance);
-        setTithe(globalTithe);
       }
     } catch (error) {
       console.error('Error loading data', error);
@@ -243,20 +233,8 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className={`card ${styles.titheCard}`}>
-          <div className={styles.titheHeader}>
-            <h3 className="h3">Fondo de Diezmo</h3>
-          </div>
-          <div className={styles.amount}>
-            {formatCurrency(tithe)}
-          </div>
-          <p className="text-secondary" style={{ marginTop: '0.5rem', fontSize: '0.875rem' }}>
-            Fondo separado de ingresos.
-          </p>
-        </div>
-
         <div className={`card ${styles.savingsCard}`}>
-          <div className={styles.titheHeader}>
+          <div className={styles.cardHeader}>
             <h3 className="h3">Wallet de Ahorros</h3>
           </div>
           {!savingsAccount ? (
@@ -283,7 +261,7 @@ export default function DashboardPage() {
         </div>
 
         <div className={`card ${styles.projectionCard}`}>
-          <div className={styles.titheHeader}>
+          <div className={styles.cardHeader}>
             <h3 className="h3">Proyección Próximo Mes</h3>
           </div>
           <div className={styles.amount}>

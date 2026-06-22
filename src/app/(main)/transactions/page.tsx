@@ -23,7 +23,6 @@ export default function TransactionsPage() {
   const [accountId, setAccountId] = useState('');
   const [destinationAccountId, setDestinationAccountId] = useState('');
   const [budgetId, setBudgetId] = useState('');
-  const [isTithe, setIsTithe] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -92,8 +91,7 @@ export default function TransactionsPage() {
         description,
         date,
         account_id: accountId || null,
-        user_id: user.id,
-        is_tithe: isTithe
+        user_id: user.id
       };
 
       if (type === 'transfer') {
@@ -110,7 +108,6 @@ export default function TransactionsPage() {
       // Reset form
       setAmount('');
       setDescription('');
-      setIsTithe(false);
       loadData();
     } catch (err) {
       console.error(err);
@@ -189,7 +186,6 @@ export default function TransactionsPage() {
                   <td>
                     <div style={{fontWeight: 500}}>{t.description}</div>
                     {t.budgets?.name && <span className={styles.badge}>{t.budgets.name}</span>}
-                    {t.is_tithe && <span className={`${styles.badge} ${styles.badgeTithe}`}>Diezmo</span>}
                   </td>
                   <td>
                     <span className={`${styles.typeBadge} ${styles[t.type]}`}>
@@ -275,12 +271,7 @@ export default function TransactionsPage() {
                 </div>
               )}
 
-              {type !== 'transfer' && (
-                <div className={styles.checkboxGroup}>
-                  <input type="checkbox" id="isTithe" checked={isTithe} onChange={e => setIsTithe(e.target.checked)} />
-                  <label htmlFor="isTithe">Es movimiento de Diezmo</label>
-                </div>
-              )}
+
 
               <div className={styles.modalActions}>
                 <button type="button" className="btn-secondary" onClick={() => setIsModalOpen(false)}>Cancelar</button>

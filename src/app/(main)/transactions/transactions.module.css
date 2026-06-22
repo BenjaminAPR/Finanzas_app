@@ -79,12 +79,7 @@
   font-size: 0.75rem;
 }
 
-.badgeTithe {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  border-color: var(--text-primary);
-  margin-left: 0.5rem;
-}
+
 
 .typeBadge {
   padding: 0.25rem 0.75rem;
