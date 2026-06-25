@@ -20,6 +20,7 @@ export default function MainLayout({ children }: { children: ReactNode }) {
     { label: 'Cuentas y Presupuestos', path: '/accounts', icon: '💳' },
     { label: 'Movimientos', path: '/transactions', icon: '💸' },
     { label: 'Deudas', path: '/debts', icon: '📉' },
+    { label: 'Reportes', path: '/reports', icon: '📈' },
   ];
 
   return (
