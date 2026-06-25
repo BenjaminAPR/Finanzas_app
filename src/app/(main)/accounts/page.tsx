@@ -8,6 +8,7 @@ import styles from './accounts.module.css';
 export default function AccountsPage() {
   const router = useRouter();
   const [accounts, setAccounts] = useState<any[]>([]);
+  const [globalBudgets, setGlobalBudgets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
@@ -27,12 +28,22 @@ export default function AccountsPage() {
 
   async function loadAccounts() {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
       const { data: accData, error } = await supabase
         .from('accounts')
-        .select(`*, budgets(*)`)
+        .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
+      
+      // Fetch global budgets directly
+      // Fallback: si account.user_id no funciona, intentamos traer todo
+      const { data: budgetsData } = await supabase
+        .from('budgets')
+        .select('*, accounts!inner(user_id)')
+        .eq('accounts.user_id', user.id);
 
       const { data: txData } = await supabase.from('transactions').select('*');
 
@@ -52,31 +63,30 @@ export default function AccountsPage() {
             }
           });
         }
-        
-        let budgets = acc.budgets || [];
-        budgets = budgets.map((b: any) => {
-          let spent = 0;
-          if (txData) {
-            txData.forEach(tx => {
-              const isCurrentCycle = new Date(tx.created_at) > cycleStartDate && tx.description !== '🔄 Cierre de Mes';
-              if (
-                tx.type === 'expense' && 
-                tx.budget_id === b.id &&
-                isCurrentCycle
-              ) {
-                spent += tx.amount;
-              }
-            });
-          }
-          return { ...b, spent };
-        });
-
-        budgets.sort((a: any, b: any) => a.name.localeCompare(b.name));
-
-        return { ...acc, balance, budgets };
+        return { ...acc, balance };
       }) || [];
+      
+      let processedBudgets = budgetsData?.map(b => {
+        let spent = 0;
+        if (txData) {
+          txData.forEach(tx => {
+            const isCurrentCycle = new Date(tx.created_at) > cycleStartDate && tx.description !== '🔄 Cierre de Mes';
+            if (
+              tx.type === 'expense' && 
+              tx.budget_id === b.id &&
+              isCurrentCycle
+            ) {
+              spent += tx.amount;
+            }
+          });
+        }
+        return { ...b, spent };
+      }) || [];
+      
+      processedBudgets.sort((a: any, b: any) => a.name.localeCompare(b.name));
 
       setAccounts(processedAccounts);
+      setGlobalBudgets(processedBudgets);
     } catch (err) {
       console.error(err);
     } finally {
@@ -109,8 +119,10 @@ export default function AccountsPage() {
   async function handleSaveBudget(e: React.FormEvent) {
     e.preventDefault();
     if (!selectedAccountId && !editingBudgetId) return;
-
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      
       const amount = parseFloat(newBudgetAmount) || 0;
 
       if (editingBudgetId) {
@@ -120,10 +132,13 @@ export default function AccountsPage() {
         }).eq('id', editingBudgetId);
         if (error) throw error;
       } else {
+        // Obtenemos la primera cuenta para vincularla a nivel de DB por constraint (temporal hasta migración)
+        const accIdToUse = accounts.length > 0 ? accounts[0].id : null;
         const { error } = await supabase.from('budgets').insert({
-          account_id: selectedAccountId,
+          account_id: accIdToUse,
           name: newBudgetName,
-          amount: amount
+          amount: amount,
+          user_id: user.id // si la migración ya se corrió, esto asocia al usuario
         });
         if (error) throw error;
       }
@@ -136,8 +151,7 @@ export default function AccountsPage() {
     }
   }
 
-  function openNewBudgetModal(accountId: string) {
-    setSelectedAccountId(accountId);
+  function openNewBudgetModal() {
     setEditingBudgetId(null);
     setNewBudgetName('');
     setNewBudgetAmount('');
@@ -163,18 +177,21 @@ export default function AccountsPage() {
 
   if (loading) return <div className={styles.loading}>Cargando cuentas...</div>;
 
-  const allBudgets = accounts.flatMap(a => (a.budgets || []).map((b: any) => ({...b, accountName: a.name, accountId: a.id})));
-
   return (
     <div className={styles.page}>
       <header className={styles.header}>
         <div>
           <h1 className="h2">Cuentas y Presupuestos</h1>
-          <p className="text-secondary">Administra tus cuentas bancarias y divide tu dinero en presupuestos.</p>
+          <p className="text-secondary">Administra tus cuentas bancarias y divide tu dinero en presupuestos globales.</p>
         </div>
-        <button className="btn-primary" onClick={() => setIsAccountModalOpen(true)}>
-          <span>+</span> Nueva Cuenta
-        </button>
+        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <button className="btn-secondary" onClick={() => openNewBudgetModal()}>
+            <span>+</span> Nuevo Presupuesto
+          </button>
+          <button className="btn-primary" onClick={() => setIsAccountModalOpen(true)}>
+            <span>+</span> Nueva Cuenta
+          </button>
+        </div>
       </header>
 
       <div>
@@ -201,13 +218,6 @@ export default function AccountsPage() {
                 <div style={{ fontSize: '1.5rem', fontWeight: 700, marginTop: '0.5rem' }}>
                   {formatCurrency(account.balance)}
                 </div>
-                <button 
-                  className="btn-secondary" 
-                  onClick={(e) => { e.stopPropagation(); openNewBudgetModal(account.id); }}
-                  style={{ marginTop: '0.5rem', padding: '0.5rem', fontSize: '0.85rem' }}
-                >
-                  + Asignar Presupuesto
-                </button>
               </div>
             ))
           )}
@@ -215,14 +225,14 @@ export default function AccountsPage() {
       </div>
 
       <div>
-        <h2 className={styles.sectionTitle}>Presupuestos Asignados</h2>
+        <h2 className={styles.sectionTitle}>Presupuestos Globales</h2>
         <div className={styles.budgetsGrid}>
-          {allBudgets.length === 0 ? (
+          {globalBudgets.length === 0 ? (
             <div className={styles.emptyState}>
-              No has asignado presupuestos a ninguna cuenta.
+              No has creado presupuestos globales. Haz clic en "Nuevo Presupuesto".
             </div>
           ) : (
-            allBudgets.map(b => {
+            globalBudgets.map(b => {
               const isVariable = b.amount === 0;
               const progress = isVariable ? 0 : Math.min((b.spent / b.amount) * 100, 100);
               const isOverBudget = !isVariable && b.spent > b.amount;
@@ -232,7 +242,7 @@ export default function AccountsPage() {
                   <div className={styles.budgetHeader}>
                     <div>
                       <h4 style={{ fontWeight: 600, fontSize: '1rem' }}>{b.name}</h4>
-                      <span className={styles.budgetAccount}>{b.accountName}</span>
+                      <span className={styles.budgetAccount}>Presupuesto Global</span>
                     </div>
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                       <button onClick={() => router.push(`/transactions?budget=${b.id}`)} style={{padding: '0.2rem', fontSize: '0.875rem', borderRadius: '4px', background: 'var(--bg-primary)', border: '1px solid var(--border-color)', cursor: 'pointer'}}>🔍</button>

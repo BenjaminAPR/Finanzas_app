@@ -13,6 +13,8 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<any>(null);
   const [totalBalance, setTotalBalance] = useState(0);
+  const [totalSavings, setTotalSavings] = useState(0);
+  const [liquidity, setLiquidity] = useState(0);
   const [accounts, setAccounts] = useState<any[]>([]);
   
   // Savings State
@@ -130,10 +132,13 @@ export default function DashboardPage() {
 
         setAccounts(processedAccounts);
         
-        const savingsAcc = processedAccounts.find(a => a.type === 'Cuenta de Ahorro');
-        setSavingsAccount(savingsAcc || null);
+        const savingsAccounts = processedAccounts.filter(a => a.type === 'Cuenta de Ahorro');
+        const totalSavingsAmount = savingsAccounts.reduce((acc, a) => acc + a.balance, 0);
         
-        setTotalBalance(globalBalance);
+        setSavingsAccount(savingsAccounts[0] || null);
+        setTotalSavings(totalSavingsAmount);
+        setTotalBalance(globalBalance); // Patrimonio Total
+        setLiquidity(globalBalance - totalSavingsAmount); // Liquidez
       }
     } catch (error) {
       console.error('Error loading data', error);
@@ -253,13 +258,24 @@ export default function DashboardPage() {
       <div className={styles.dashboardLayout}>
         {/* COLUMNA 1 */}
         <div className={styles.col1}>
-          <div className="card">
-            <h3 className="h3">Balance Total</h3>
-            <div className={styles.amount}>
-              {formatCurrency(totalBalance)}
+          <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '2rem' }}>
+            <div>
+              <h3 className="h3" style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Liquidez Disponible (Sin Ahorros)</h3>
+              <div className={styles.amount} style={{ fontSize: '3rem', marginTop: '0.25rem' }}>
+                {formatCurrency(liquidity)}
+              </div>
+              <div className={styles.cardFooter} style={{ marginTop: '0.5rem' }}>
+                <span className={styles.trend} style={{ color: 'var(--success)' }}>Dinero listo para gastar</span>
+              </div>
             </div>
-            <div className={styles.cardFooter}>
-              <span className={styles.trend}>↑ Actualizado hoy</span>
+            <div style={{ textAlign: 'right', borderLeft: '1px solid var(--border-color)', paddingLeft: '2rem' }}>
+              <h3 className="h3" style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Patrimonio Total</h3>
+              <div className={styles.amount} style={{ fontSize: '1.5rem', color: 'var(--text-primary)', marginTop: '0.25rem' }}>
+                {formatCurrency(totalBalance)}
+              </div>
+              <div className={styles.cardFooter} style={{ justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+                <span className={styles.trend}>Incluye tus ahorros</span>
+              </div>
             </div>
           </div>
 

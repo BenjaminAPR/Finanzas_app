@@ -248,7 +248,7 @@ export default function TransactionsPage() {
                   <label className="input-label">Presupuesto (Opcional)</label>
                   <select className="input-field" value={budgetId} onChange={e => setBudgetId(e.target.value)}>
                     <option value="">Ninguno</option>
-                    {budgets.filter(b => b.account_id === accountId).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                    {budgets.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                   </select>
                 </div>
               )}
