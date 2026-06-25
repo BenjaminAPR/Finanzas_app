@@ -95,11 +95,12 @@
 }
 
 .trend {
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  box-shadow: var(--shadow-sm);
   color: var(--text-secondary);
-  padding: 0.25rem 0.75rem;
+  padding: 0.35rem 0.85rem;
   border-radius: 999px;
+  font-weight: 500;
 }
 
 .accountList {
@@ -115,16 +116,16 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
+  padding: 1.25rem;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-sm);
   border-radius: 1rem;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .accountItem:hover {
-  transform: translateX(4px);
-  border-color: var(--accent-color);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
 }
 
 .accountInfo {
@@ -136,8 +137,9 @@
 .accountIcon {
   font-size: 1.5rem;
   background: var(--bg-primary);
-  padding: 0.75rem;
-  border-radius: 0.75rem;
+  padding: 0.85rem;
+  border-radius: 1rem;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
 }
 
 .accountName {

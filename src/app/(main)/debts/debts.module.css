@@ -92,11 +92,12 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.75rem;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  border-radius: 0.5rem;
+  padding: 1rem;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-sm);
+  border-radius: 0.75rem;
   font-size: 0.875rem;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .installment.paid {
@@ -117,19 +118,21 @@
 }
 
 .payBtn {
-  padding: 0.25rem 0.75rem;
-  background: var(--bg-secondary);
-  border: 1px solid var(--accent-color);
+  padding: 0.35rem 1rem;
+  background: rgba(0, 113, 227, 0.1);
   color: var(--accent-color);
-  border-radius: 4px;
-  font-size: 0.75rem;
-  font-weight: 500;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
   cursor: pointer;
+  transition: all 0.2s ease;
 }
 
 .payBtn:hover {
   background: var(--accent-color);
   color: white;
+  transform: translateY(-1px);
 }
 
 .paidBadge {

@@ -94,8 +94,9 @@
 }
 
 .navItem.active {
-  background: var(--text-primary);
-  color: var(--bg-primary);
+  background: rgba(0, 113, 227, 0.1); /* Apple Blue subtle background */
+  color: var(--accent-color);
+  font-weight: 600;
 }
 
 .icon {
