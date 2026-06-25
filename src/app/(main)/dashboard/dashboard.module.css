@@ -27,44 +27,121 @@
   font-size: 1.25rem;
 }
 
-.grid {
+.dashboardLayout {
   display: grid;
-  grid-template-columns: repeat(12, 1fr);
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 1024px) {
+  .dashboardLayout {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .dashboardLayout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.col1, .col2, .col3 {
+  display: flex;
+  flex-direction: column;
   gap: 1.5rem;
 }
 
-@media (max-width: 768px) {
-  .grid {
-    display: flex;
-    flex-direction: column;
-  }
+.recentTxList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 1rem;
 }
 
-.mainCard {
-  grid-column: span 6;
+.recentTxItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.85rem;
+  background: var(--bg-primary);
+  border-radius: 0.75rem;
+  font-size: 0.875rem;
+  transition: all 0.2s;
 }
 
-.savingsCard {
-  grid-column: span 6;
+.txInfo {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
 }
 
-.projectionCard {
-  grid-column: span 12;
-  border: 1px dashed var(--border-color); /* Subtle distinction */
+.txIcon {
+  font-size: 1.25rem;
+  background: var(--bg-secondary);
+  padding: 0.5rem;
+  border-radius: 0.5rem;
 }
 
-.chartCard {
-  grid-column: span 6;
+.txDetails {
+  display: flex;
+  flex-direction: column;
 }
 
-@media (max-width: 768px) {
-  .chartCard {
-    grid-column: span 12;
-  }
+.txTitle {
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
-.accountsCard {
-  grid-column: span 12;
+.txDate {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.txAmount {
+  font-weight: 600;
+}
+
+.budgetGoalsList {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-top: 1rem;
+}
+
+.budgetGoal {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.budgetGoalHeader {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.budgetBarBg {
+  height: 6px;
+  background: var(--border-color);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.budgetBarFill {
+  height: 100%;
+  background: var(--accent-color);
+  border-radius: 999px;
+  transition: width 0.5s ease;
+}
+
+.budgetGoalSub {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
 }
 
 .amount {

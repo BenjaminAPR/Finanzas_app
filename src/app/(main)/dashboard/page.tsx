@@ -24,8 +24,9 @@ export default function DashboardPage() {
   
   // Analytics State
   const [pieData, setPieData] = useState<any[]>([]);
-  const [barData, setBarData] = useState<any[]>([]);
   const [projectedExpenses, setProjectedExpenses] = useState(0);
+  const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
+  const [budgetGoals, setBudgetGoals] = useState<any[]>([]);
 
   useEffect(() => {
     loadData();
@@ -101,9 +102,14 @@ export default function DashboardPage() {
         })) || [];
         setPieData(newPieData);
 
-        setBarData([
-          { name: 'Este Mes', Ingresos: monthIncome, Gastos: monthExpense }
-        ]);
+        const bGoals = budgetsData?.map(b => ({
+          ...b,
+          spent: budgetExpenses[b.id] || 0
+        })) || [];
+        setBudgetGoals(bGoals);
+
+        const recentTx = sortedTx.filter(tx => tx.description !== '🔄 Cierre de Mes').slice(0, 5);
+        setRecentTransactions(recentTx);
 
         // Proyección: Presupuestos fijos + próxima cuota de cada deuda
         let projection = 0;
@@ -244,102 +250,52 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <div className={styles.grid}>
-        <div className={`card ${styles.mainCard}`}>
-          <h3 className="h3">Balance Total</h3>
-          <div className={styles.amount}>
-            {formatCurrency(totalBalance)}
+      <div className={styles.dashboardLayout}>
+        {/* COLUMNA 1 */}
+        <div className={styles.col1}>
+          <div className="card">
+            <h3 className="h3">Balance Total</h3>
+            <div className={styles.amount}>
+              {formatCurrency(totalBalance)}
+            </div>
+            <div className={styles.cardFooter}>
+              <span className={styles.trend}>↑ Actualizado hoy</span>
+            </div>
           </div>
-          <div className={styles.cardFooter}>
-            <span className={styles.trend}>↑ Actualizado hoy</span>
-          </div>
-        </div>
 
-        <div className={`card ${styles.savingsCard}`}>
-          <div className={styles.cardHeader}>
-            <h3 className="h3">Wallet de Ahorros</h3>
-          </div>
-          {!savingsAccount ? (
-             <div style={{ marginTop: '1rem' }}>
-               <p className="text-secondary" style={{ fontSize: '0.875rem', marginBottom: '1rem' }}>Cuenta única para separar y guardar tu dinero a futuro.</p>
-               <button className="btn-secondary" onClick={handleCreateSavingsWallet} style={{ width: '100%', padding: '0.5rem' }}>Activar Wallet</button>
-             </div>
-          ) : (
-             <>
-               <div className={styles.amount}>
-                 {formatCurrency(savingsAccount.balance)}
-               </div>
-               <button className="btn-secondary" onClick={() => setSavingsModalOpen(true)} style={{ width: '100%', padding: '0.75rem', fontSize: '0.95rem' }}>+ Ingresar Ahorro</button>
-             </>
-          )}
-        </div>
-
-        <div className={`card ${styles.projectionCard}`}>
-          <div className={styles.cardHeader}>
-            <h3 className="h3">Proyección Próximo Mes</h3>
-          </div>
-          <div className={styles.amount}>
-            {formatCurrency(projectedExpenses)}
-          </div>
-          <p className="text-secondary" style={{ marginTop: '0.5rem', fontSize: '0.875rem' }}>
-            Suma de tus presupuestos fijos y cuotas de deuda pendientes.
-          </p>
-        </div>
-
-        <div className={`card ${styles.chartCard}`}>
-          <h3 className="h3" style={{ marginBottom: '1.5rem' }}>Gastos por Presupuesto (Este mes)</h3>
-          <div style={{ height: 300 }}>
-            {pieData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={100}
-                    fill="#8884d8"
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {pieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <RechartsTooltip formatter={(value: any) => formatCurrency(Number(value))} />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
+          <div className="card">
+            <h3 className="h3">Transacciones Recientes</h3>
+            {recentTransactions.length === 0 ? (
+              <p className="text-secondary" style={{ marginTop: '1rem', fontSize: '0.875rem' }}>No hay transacciones recientes.</p>
             ) : (
-              <div className={styles.emptyState}>No hay gastos en presupuestos este mes.</div>
+              <div className={styles.recentTxList}>
+                {recentTransactions.map(tx => (
+                  <div key={tx.id} className={styles.recentTxItem}>
+                    <div className={styles.txInfo}>
+                      <span className={styles.txIcon}>{tx.type === 'income' ? '↓' : tx.type === 'expense' ? '↑' : '⇄'}</span>
+                      <div className={styles.txDetails}>
+                        <span className={styles.txTitle}>{tx.description}</span>
+                        <span className={styles.txDate}>{new Date(tx.date).toLocaleDateString('es-CL')}</span>
+                      </div>
+                    </div>
+                    <span className={styles.txAmount} style={{ color: tx.type === 'income' ? 'var(--success)' : tx.type === 'expense' ? 'var(--danger)' : 'var(--text-primary)' }}>
+                      {tx.type === 'expense' ? '-' : tx.type === 'income' ? '+' : ''}{formatCurrency(tx.amount)}
+                    </span>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </div>
 
-        <div className={`card ${styles.chartCard}`}>
-          <h3 className="h3" style={{ marginBottom: '1.5rem' }}>Flujo de Caja (Este mes)</h3>
-          <div style={{ height: 300 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={barData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-color)" />
-                <XAxis dataKey="name" stroke="var(--text-secondary)" />
-                <YAxis stroke="var(--text-secondary)" tickFormatter={(value) => `$${value/1000}k`} />
-                <RechartsTooltip formatter={(value: any) => formatCurrency(Number(value))} cursor={{fill: 'rgba(0,0,0,0.05)'}} />
-                <Legend />
-                <Bar dataKey="Ingresos" fill="var(--success)" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Gastos" fill="var(--danger)" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div className={`card ${styles.accountsCard}`}>
-          <h3 className="h3" style={{ marginBottom: '1.5rem' }}>Tus Cuentas</h3>
-          {accounts.length === 0 ? (
-            <p className="text-secondary">No hay cuentas creadas aún.</p>
-          ) : (
+        {/* COLUMNA 2 */}
+        <div className={styles.col2}>
+          <div className="card">
+            <h3 className="h3" style={{ marginBottom: '1.5rem' }}>Tus Cuentas</h3>
             <ul className={styles.accountList}>
-              {accounts.map(acc => (
+              {accounts.filter(a => a.type !== 'Cuenta de Ahorro').length === 0 ? (
+                <p className="text-secondary" style={{ fontSize: '0.875rem' }}>No hay cuentas regulares.</p>
+              ) : accounts.filter(a => a.type !== 'Cuenta de Ahorro').map(acc => (
                 <li key={acc.id} className={styles.accountItem}>
                   <div className={styles.accountInfo}>
                     <span className={styles.accountIcon}>🏦</span>
@@ -354,7 +310,85 @@ export default function DashboardPage() {
                 </li>
               ))}
             </ul>
-          )}
+
+            <h4 className="h4" style={{ marginTop: '2rem', marginBottom: '1rem' }}>Wallet de Ahorros</h4>
+            {!savingsAccount ? (
+              <div>
+                <p className="text-secondary" style={{ fontSize: '0.875rem', marginBottom: '1rem' }}>Cuenta única para separar y guardar tu dinero a futuro.</p>
+                <button className="btn-secondary" onClick={handleCreateSavingsWallet} style={{ width: '100%', padding: '0.5rem' }}>Activar Wallet</button>
+              </div>
+            ) : (
+              <div className={styles.accountItem} style={{ border: '1px solid var(--accent-color)', background: 'var(--bg-primary)' }}>
+                <div className={styles.accountInfo}>
+                  <span className={styles.accountIcon} style={{ background: 'rgba(0, 113, 227, 0.1)', color: 'var(--accent-color)' }}>🐷</span>
+                  <div>
+                    <div className={styles.accountName}>Ahorros</div>
+                    <div className={styles.accountBalance} style={{ fontSize: '1rem' }}>{formatCurrency(savingsAccount.balance)}</div>
+                  </div>
+                </div>
+                <button className="btn-primary" onClick={() => setSavingsModalOpen(true)} style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}>Transferir</button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* COLUMNA 3 */}
+        <div className={styles.col3}>
+          <div className="card">
+            <h3 className="h3" style={{ marginBottom: '1.5rem' }}>Gasto Mensual</h3>
+            <div style={{ height: 250 }}>
+              {pieData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={90}
+                      fill="#8884d8"
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      {pieData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip formatter={(value: any) => formatCurrency(Number(value))} />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-secondary)' }}>No hay gastos en presupuestos este mes.</div>
+              )}
+            </div>
+          </div>
+
+          <div className="card">
+            <h3 className="h3">Metas de Presupuesto</h3>
+            <div className={styles.budgetGoalsList}>
+              {budgetGoals.length === 0 ? (
+                <p className="text-secondary" style={{ fontSize: '0.875rem' }}>No has creado presupuestos.</p>
+              ) : budgetGoals.map(bg => {
+                const percentage = Math.min(100, Math.round((bg.spent / bg.amount) * 100)) || 0;
+                return (
+                  <div key={bg.id} className={styles.budgetGoal}>
+                    <div className={styles.budgetGoalHeader}>
+                      <span>{bg.name}</span>
+                      <span style={{ color: percentage >= 100 ? 'var(--danger)' : 'var(--text-primary)' }}>{percentage}%</span>
+                    </div>
+                    <div className={styles.budgetBarBg}>
+                      <div className={styles.budgetBarFill} style={{ width: `${percentage}%`, background: percentage >= 100 ? 'var(--danger)' : percentage > 80 ? 'var(--warning)' : 'var(--accent-color)' }}></div>
+                    </div>
+                    <div className={styles.budgetGoalSub}>
+                      <span>Restante: {formatCurrency(Math.max(0, bg.amount - bg.spent))}</span>
+                      <span>{formatCurrency(bg.spent)} / {formatCurrency(bg.amount)}</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
         </div>
       </div>
 
