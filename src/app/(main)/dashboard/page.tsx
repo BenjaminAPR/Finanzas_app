@@ -333,22 +333,22 @@ export default function DashboardPage() {
       <div className={styles.dashboardLayout}>
         {/* COLUMNA 1 */}
         <div className={styles.col1}>
-          <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '2rem' }}>
-            <div>
-              <h3 className="h3" style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Liquidez Disponible (Sin Ahorros)</h3>
-              <div className={styles.amount} style={{ fontSize: '3rem', marginTop: '0.25rem' }}>
+          <div className={`card ${styles.balanceCard}`}>
+            <div className={styles.balanceCardMain}>
+              <h3 className="h3">Liquidez Disponible (Sin Ahorros)</h3>
+              <div className={styles.amount}>
                 {formatCurrency(liquidity)}
               </div>
-              <div className={styles.cardFooter} style={{ marginTop: '0.5rem' }}>
+              <div className={styles.cardFooter}>
                 <span className={styles.trend} style={{ color: 'var(--success)' }}>Dinero listo para gastar</span>
               </div>
             </div>
-            <div style={{ textAlign: 'right', borderLeft: '1px solid var(--border-color)', paddingLeft: '2rem' }}>
-              <h3 className="h3" style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Patrimonio Total</h3>
-              <div className={styles.amount} style={{ fontSize: '1.5rem', color: 'var(--text-primary)', marginTop: '0.25rem' }}>
+            <div className={styles.balanceCardSub}>
+              <h3 className="h3">Patrimonio Total</h3>
+              <div className={styles.amount}>
                 {formatCurrency(totalBalance)}
               </div>
-              <div className={styles.cardFooter} style={{ justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+              <div className={styles.cardFooter} style={{ justifyContent: 'inherit' }}>
                 <span className={styles.trend}>Incluye tus ahorros</span>
               </div>
             </div>
