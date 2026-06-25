@@ -55,7 +55,7 @@ export default function ReportsPage() {
         } else {
           // Add to current cycle
           if (tx.type === 'income' && tx.description !== '[AHORRO] Saldo Inicial') currentCycleIncome += tx.amount;
-          if (tx.type === 'expense') currentCycleExpense += tx.amount;
+          if (tx.type === 'expense' && tx.description !== '🔄 Rollover') currentCycleExpense += tx.amount;
         }
       });
 

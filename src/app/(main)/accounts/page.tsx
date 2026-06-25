@@ -55,6 +55,7 @@ export default function AccountsPage() {
         let balance = 0;
         if (txData) {
           txData.forEach(tx => {
+            if (tx.description === '🔄 Rollover') return;
             if (tx.type === 'income' && tx.account_id === acc.id) balance += tx.amount;
             if (tx.type === 'expense' && tx.account_id === acc.id) balance -= tx.amount;
             if (tx.type === 'transfer') {
@@ -68,19 +69,20 @@ export default function AccountsPage() {
       
       let processedBudgets = budgetsData?.map(b => {
         let spent = 0;
+        let rollover = 0;
         if (txData) {
           txData.forEach(tx => {
             const isCurrentCycle = new Date(tx.created_at) > cycleStartDate && tx.description !== '🔄 Cierre de Mes';
-            if (
-              tx.type === 'expense' && 
-              tx.budget_id === b.id &&
-              isCurrentCycle
-            ) {
+            if (!isCurrentCycle) return;
+            
+            if (tx.description === '🔄 Rollover' && tx.budget_id === b.id) {
+              rollover += tx.amount;
+            } else if (tx.type === 'expense' && tx.budget_id === b.id) {
               spent += tx.amount;
             }
           });
         }
-        return { ...b, spent };
+        return { ...b, amount: b.amount + rollover, baseAmount: b.amount, spent };
       }) || [];
       
       processedBudgets.sort((a: any, b: any) => a.name.localeCompare(b.name));
@@ -242,7 +244,10 @@ export default function AccountsPage() {
                   <div className={styles.budgetHeader}>
                     <div>
                       <h4 style={{ fontWeight: 600, fontSize: '1rem' }}>{b.name}</h4>
-                      <span className={styles.budgetAccount}>Presupuesto Global</span>
+                      <span className={styles.budgetAccount}>
+                        Presupuesto Global
+                        {b.amount > b.baseAmount && <span style={{ marginLeft: '0.5rem', color: 'var(--success)', background: 'var(--success-bg, rgba(16, 185, 129, 0.1))', padding: '0.1rem 0.4rem', borderRadius: '4px', fontSize: '0.7rem' }}>+ {formatCurrency(b.amount - b.baseAmount)} Rollover</span>}
+                      </span>
                     </div>
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                       <button onClick={() => router.push(`/transactions?budget=${b.id}`)} style={{padding: '0.2rem', fontSize: '0.875rem', borderRadius: '4px', background: 'var(--bg-primary)', border: '1px solid var(--border-color)', cursor: 'pointer'}}>🔍</button>

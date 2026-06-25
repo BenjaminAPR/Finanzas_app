@@ -63,29 +63,37 @@ export default function DashboardPage() {
         let monthIncome = 0;
         let monthExpense = 0;
         let budgetExpenses: Record<string, number> = {};
+        let budgetRollovers: Record<string, number> = {};
 
         if (transactionsData) {
           transactionsData.forEach(tx => {
+            const isRollover = tx.description === '🔄 Rollover';
             const isCurrentCycle = new Date(tx.created_at) > cycleStartDate && tx.description !== '🔄 Cierre de Mes';
             const isInitialSavings = tx.description === '[AHORRO] Saldo Inicial';
 
-            // Calcular balance global
-            if (tx.type === 'income') globalBalance += tx.amount;
-            if (tx.type === 'expense') globalBalance -= tx.amount;
+            if (isRollover && isCurrentCycle && tx.budget_id) {
+              budgetRollovers[tx.budget_id] = (budgetRollovers[tx.budget_id] || 0) + tx.amount;
+            }
 
-            // Calcular balances por cuenta
-            const originAcc = processedAccounts.find(a => a.id === tx.account_id);
-            const destAcc = processedAccounts.find(a => a.id === tx.destination_account_id);
+            if (!isRollover) {
+              // Calcular balance global
+              if (tx.type === 'income') globalBalance += tx.amount;
+              if (tx.type === 'expense') globalBalance -= tx.amount;
 
-            if (tx.type === 'income' && originAcc) originAcc.balance += tx.amount; 
-            if (tx.type === 'expense' && originAcc) originAcc.balance -= tx.amount;
-            if (tx.type === 'transfer') {
-              if (originAcc) originAcc.balance -= tx.amount;
-              if (destAcc) destAcc.balance += tx.amount;
+              // Calcular balances por cuenta
+              const originAcc = processedAccounts.find(a => a.id === tx.account_id);
+              const destAcc = processedAccounts.find(a => a.id === tx.destination_account_id);
+
+              if (tx.type === 'income' && originAcc) originAcc.balance += tx.amount; 
+              if (tx.type === 'expense' && originAcc) originAcc.balance -= tx.amount;
+              if (tx.type === 'transfer') {
+                if (originAcc) originAcc.balance -= tx.amount;
+                if (destAcc) destAcc.balance += tx.amount;
+              }
             }
 
             // Analytics del ciclo actual
-            if (isCurrentCycle) {
+            if (isCurrentCycle && !isRollover) {
               if (tx.type === 'income' && !isInitialSavings) monthIncome += tx.amount;
               if (tx.type === 'expense') {
                 monthExpense += tx.amount;
@@ -104,13 +112,18 @@ export default function DashboardPage() {
         })) || [];
         setPieData(newPieData);
 
-        const bGoals = budgetsData?.map(b => ({
-          ...b,
-          spent: budgetExpenses[b.id] || 0
-        })) || [];
+        const bGoals = budgetsData?.map(b => {
+          const rollover = budgetRollovers[b.id] || 0;
+          return {
+            ...b,
+            baseAmount: b.amount, // Guardamos el base original si queremos mostrarlo
+            amount: b.amount + rollover, // Limit efectivo
+            spent: budgetExpenses[b.id] || 0
+          };
+        }) || [];
         setBudgetGoals(bGoals);
 
-        const recentTx = sortedTx.filter(tx => tx.description !== '🔄 Cierre de Mes').slice(0, 5);
+        const recentTx = sortedTx.filter(tx => tx.description !== '🔄 Cierre de Mes' && tx.description !== '🔄 Rollover').slice(0, 5);
         setRecentTransactions(recentTx);
 
         // Proyección: Presupuestos fijos + próxima cuota de cada deuda
@@ -148,11 +161,20 @@ export default function DashboardPage() {
   }
 
   async function handleCloseMonth() {
-    if (!window.confirm('¿Estás seguro de que quieres cerrar el mes? Esto reiniciará tus presupuestos y gráficos a $0 para comenzar un nuevo ciclo. Tus saldos bancarios y tu historial quedarán intactos.')) return;
+    if (!window.confirm('¿Estás seguro de que quieres cerrar el mes? El dinero sobrante de tus presupuestos se acumulará como "Rollover" para el próximo ciclo.')) return;
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       
+      // Calculate leftovers
+      const leftovers: { budget_id: string, amount: number }[] = [];
+      budgetGoals.forEach(b => {
+        const leftover = b.amount - b.spent; // amount aquí ya es base + rollover previo
+        if (leftover > 0 && b.baseAmount > 0) { // ignoramos los variables (baseAmount === 0)
+          leftovers.push({ budget_id: b.id, amount: leftover });
+        }
+      });
+
       const { error } = await supabase.from('transactions').insert({
         type: 'expense',
         amount: 0,
@@ -161,6 +183,22 @@ export default function DashboardPage() {
         user_id: user.id
       });
       if (error) throw error;
+      
+      if (leftovers.length > 0) {
+        // Pausa breve para asegurar que el Cierre quede antes en created_at
+        await new Promise(r => setTimeout(r, 1000));
+        
+        const rolloverTxs = leftovers.map(l => ({
+          type: 'expense',
+          amount: l.amount,
+          description: '🔄 Rollover',
+          date: new Date().toISOString().split('T')[0],
+          budget_id: l.budget_id,
+          user_id: user.id
+        }));
+        
+        await supabase.from('transactions').insert(rolloverTxs);
+      }
       
       loadData();
     } catch (err) {
@@ -357,7 +395,10 @@ export default function DashboardPage() {
                 return (
                   <div key={bg.id} className={styles.budgetGoal}>
                     <div className={styles.budgetGoalHeader}>
-                      <span>{bg.name}</span>
+                      <span>
+                        {bg.name}
+                        {bg.amount > bg.baseAmount && <span style={{ marginLeft: '0.5rem', color: 'var(--success)', fontSize: '0.7rem' }}>+ {formatCurrency(bg.amount - bg.baseAmount)} Roll</span>}
+                      </span>
                       <span style={{ color: percentage >= 100 ? 'var(--danger)' : 'var(--text-primary)' }}>{percentage}%</span>
                     </div>
                     <div className={styles.budgetBarBg}>
