@@ -159,61 +159,43 @@ export default function TransactionsPage() {
         )}
       </div>
 
-      <div className={`card ${styles.tableCard}`}>
+      <div className={styles.feedList}>
         {transactions.length === 0 ? (
           <div className={styles.emptyState}>No hay movimientos registrados.</div>
         ) : (
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th>Fecha</th>
-                <th>Descripción</th>
-                <th>Tipo</th>
-                <th>Cuenta</th>
-                <th>Usuario</th>
-                <th className={styles.alignRight}>Monto</th>
-                <th className={styles.alignRight}>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {transactions.filter(t => {
-                if (filterAccountId && t.account_id !== filterAccountId && t.destination_account_id !== filterAccountId) return false;
-                if (filterBudgetId && t.budget_id !== filterBudgetId) return false;
-                return true;
-              }).map(t => (
-                <tr key={t.id}>
-                  <td>{new Date(t.date).toLocaleDateString('es-CL')}</td>
-                  <td>
-                    <div style={{fontWeight: 500}}>{t.description}</div>
-                    {t.budgets?.name && <span className={styles.badge}>{t.budgets.name}</span>}
-                  </td>
-                  <td>
-                    <span className={`${styles.typeBadge} ${styles[t.type]}`}>
-                      {t.type === 'income' ? 'Ingreso' : t.type === 'expense' ? 'Egreso' : 'Transferencia'}
-                    </span>
-                  </td>
-                  <td>
-                    {t.type === 'transfer' 
-                      ? `${t.accounts?.name} ➔ ${t.dest_account?.name}`
-                      : t.accounts?.name}
-                  </td>
-                  <td className="text-secondary">{t.profiles?.full_name || 'Usuario'}</td>
-                  <td className={`${styles.alignRight} ${t.type === 'expense' ? styles.negative : styles.positive}`}>
-                    {t.type === 'expense' ? '-' : '+'}{formatCurrency(t.amount)}
-                  </td>
-                  <td className={styles.alignRight}>
-                    <button 
-                      onClick={() => handleDeleteTransaction(t.id)} 
-                      className={styles.deleteBtn}
-                      title="Eliminar movimiento"
-                    >
-                      🗑️
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          transactions.filter(t => {
+            if (filterAccountId && t.account_id !== filterAccountId && t.destination_account_id !== filterAccountId) return false;
+            if (filterBudgetId && t.budget_id !== filterBudgetId) return false;
+            return true;
+          }).map(t => (
+            <div key={t.id} className={styles.feedItem}>
+              <div className={styles.feedInfo}>
+                <span className={`${styles.feedIcon} ${t.type === 'income' ? styles.iconIncome : t.type === 'expense' ? styles.iconExpense : styles.iconTransfer}`}>
+                  {t.type === 'income' ? '↓' : t.type === 'expense' ? '↑' : '⇄'}
+                </span>
+                <div className={styles.feedDetails}>
+                  <span className={styles.feedTitle}>{t.description}</span>
+                  <div className={styles.feedMeta}>
+                    <span>{new Date(t.date).toLocaleDateString('es-CL')}</span>
+                    {t.budgets?.name && <span>• {t.budgets.name}</span>}
+                    <span>• {t.type === 'transfer' ? `${t.accounts?.name} ➔ ${t.dest_account?.name}` : t.accounts?.name}</span>
+                  </div>
+                </div>
+              </div>
+              <div className={styles.feedAmount}>
+                <span style={{ color: t.type === 'expense' ? 'var(--danger)' : t.type === 'income' ? 'var(--success)' : 'var(--text-primary)' }}>
+                  {t.type === 'expense' ? '-' : t.type === 'income' ? '+' : ''}{formatCurrency(t.amount)}
+                </span>
+                <button 
+                  onClick={() => handleDeleteTransaction(t.id)} 
+                  className={styles.deleteBtn}
+                  title="Eliminar movimiento"
+                >
+                  🗑️
+                </button>
+              </div>
+            </div>
+          ))
         )}
       </div>
 

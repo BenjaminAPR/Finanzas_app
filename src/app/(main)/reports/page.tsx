@@ -113,32 +113,34 @@ export default function ReportsPage() {
           </div>
         </div>
 
-        <div className={`card ${styles.tableCard}`}>
+        <div className="card">
           <h3 className="h3" style={{ marginBottom: '1rem' }}>Detalle de Ciclos</h3>
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th>Ciclo</th>
-                <th>Periodo</th>
-                <th>Ingresos Totales</th>
-                <th>Gastos Totales</th>
-                <th>Flujo Neto (Ahorro)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {cycles.map((cycle) => (
-                <tr key={cycle.id}>
-                  <td style={{ fontWeight: 600 }}>{cycle.name}</td>
-                  <td>{formatDate(cycle.startDate)} - {formatDate(cycle.endDate)}</td>
-                  <td className={styles.amountPositive}>{formatCurrency(cycle.Ingresos)}</td>
-                  <td className={styles.amountNegative}>{formatCurrency(cycle.Gastos)}</td>
-                  <td className={cycle.Neto > 0 ? styles.amountPositive : cycle.Neto < 0 ? styles.amountNegative : styles.amountNeutral}>
-                    {formatCurrency(cycle.Neto)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className={styles.feedList}>
+            {cycles.map((cycle) => (
+              <div key={cycle.id} className={styles.feedItem}>
+                <div className={styles.feedDetails}>
+                  <span className={styles.feedTitle}>{cycle.name}</span>
+                  <span className={styles.feedMeta}>{formatDate(cycle.startDate)} - {formatDate(cycle.endDate)}</span>
+                </div>
+                <div className={styles.feedAmounts}>
+                  <div className={styles.amountBlock}>
+                    <span className={styles.amountLabel}>Ingresos</span>
+                    <span className={styles.amountPositive}>{formatCurrency(cycle.Ingresos)}</span>
+                  </div>
+                  <div className={styles.amountBlock}>
+                    <span className={styles.amountLabel}>Gastos</span>
+                    <span className={styles.amountNegative}>{formatCurrency(cycle.Gastos)}</span>
+                  </div>
+                  <div className={styles.amountBlock}>
+                    <span className={styles.amountLabel}>Flujo Neto</span>
+                    <span className={cycle.Neto > 0 ? styles.amountPositive : cycle.Neto < 0 ? styles.amountNegative : styles.amountNeutral}>
+                      {formatCurrency(cycle.Neto)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>

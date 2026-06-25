@@ -163,6 +163,8 @@ export default function AccountsPage() {
 
   if (loading) return <div className={styles.loading}>Cargando cuentas...</div>;
 
+  const allBudgets = accounts.flatMap(a => (a.budgets || []).map((b: any) => ({...b, accountName: a.name, accountId: a.id})));
+
   return (
     <div className={styles.page}>
       <header className={styles.header}>
@@ -175,101 +177,95 @@ export default function AccountsPage() {
         </button>
       </header>
 
-      <div className={styles.grid}>
-        {accounts.length === 0 ? (
-          <div className={styles.emptyState}>
-            No tienes cuentas creadas. Haz clic en "Nueva Cuenta" para comenzar.
-          </div>
-        ) : (
-          accounts.map(account => (
-            <div key={account.id} className={`card ${styles.accountCard}`}>
-              <div className={styles.cardHeader}>
-                <div>
-                  <h3 className="h3" style={{display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap'}}>
-                    {account.name}
-                    <button onClick={() => router.push(`/transactions?account=${account.id}`)} className="btn-secondary" style={{padding: '0.2rem 0.5rem', fontSize: '0.75rem', borderRadius: '6px', background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-secondary)'}} title="Ver movimientos">
-                      🔍 Ver
-                    </button>
-                  </h3>
-                  <span className={styles.badge}>{account.type}</span>
+      <div>
+        <h2 className={styles.sectionTitle}>Tus Cuentas</h2>
+        <div className={styles.accountsGrid}>
+          {accounts.length === 0 ? (
+            <div className={styles.emptyState}>
+              No tienes cuentas creadas. Haz clic en "Nueva Cuenta" para comenzar.
+            </div>
+          ) : (
+            accounts.map(account => (
+              <div key={account.id} className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', cursor: 'pointer' }} onClick={() => router.push(`/transactions?account=${account.id}`)}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <span style={{ fontSize: '1.5rem', background: 'var(--bg-primary)', padding: '0.75rem', borderRadius: '12px' }}>
+                      {account.type === 'Cuenta de Ahorro' ? '🐷' : '🏦'}
+                    </span>
+                    <div>
+                      <h3 style={{ fontSize: '1rem', fontWeight: 600 }}>{account.name}</h3>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{account.type}</span>
+                    </div>
+                  </div>
                 </div>
-                <div className={styles.balance}>
+                <div style={{ fontSize: '1.5rem', fontWeight: 700, marginTop: '0.5rem' }}>
                   {formatCurrency(account.balance)}
                 </div>
+                <button 
+                  className="btn-secondary" 
+                  onClick={(e) => { e.stopPropagation(); openNewBudgetModal(account.id); }}
+                  style={{ marginTop: '0.5rem', padding: '0.5rem', fontSize: '0.85rem' }}
+                >
+                  + Asignar Presupuesto
+                </button>
               </div>
-              <div className={styles.budgetsSection}>
-                <div className={styles.budgetsHeader}>
-                  <h4>Presupuestos ({account.budgets?.length || 0})</h4>
-                  <button 
-                    className={styles.textBtn} 
-                    onClick={() => openNewBudgetModal(account.id)}
-                  >
-                    + Añadir
-                  </button>
-                </div>
-                
-                {(!account.budgets || account.budgets.length === 0) ? (
-                  <p className="text-secondary" style={{fontSize: '0.875rem'}}>
-                    Aún no has separado fondos en esta cuenta.
-                  </p>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                    {account.budgets.map((b: any) => {
-                      const isVariable = b.amount === 0;
-                      const progress = isVariable ? 0 : Math.min((b.spent / b.amount) * 100, 100);
-                      const isOverBudget = !isVariable && b.spent > b.amount;
-                      
-                      return (
-                        <div key={b.id} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', padding: '0.75rem', background: 'var(--bg-primary)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.875rem' }}>
-                            <span style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                              {b.name}
-                              <button onClick={() => router.push(`/transactions?budget=${b.id}`)} style={{padding: '0.2rem', fontSize: '0.875rem', borderRadius: '4px', background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer'}} title="Ver movimientos">
-                                🔍
-                              </button>
-                            </span>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                                <span>
-                                  {isVariable 
-                                    ? `Gastado: ${formatCurrency(b.spent)}`
-                                    : `${formatCurrency(b.spent)} / ${formatCurrency(b.amount)}`}
-                                </span>
-                                {!isVariable && !isOverBudget && (
-                                  <span style={{ fontSize: '0.75rem', color: 'var(--success-text, #10b981)', fontWeight: 500, marginTop: '0.125rem' }}>
-                                    Quedan: {formatCurrency(b.amount - b.spent)}
-                                  </span>
-                                )}
-                              </div>
-                              <button 
-                                onClick={() => openEditBudgetModal(b)}
-                                style={{ background: 'none', border: 'none', color: 'var(--accent-color)', cursor: 'pointer', fontSize: '1rem', padding: '0.2rem' }}
-                                title="Editar presupuesto"
-                              >
-                                ✎
-                              </button>
-                            </div>
-                          </div>
-                          {!isVariable && (
-                            <>
-                              <div style={{ height: '6px', background: 'var(--border-color)', borderRadius: '3px', overflow: 'hidden' }}>
-                                <div style={{ height: '100%', width: `${progress}%`, background: isOverBudget ? 'var(--danger)' : 'var(--accent-color)' }}></div>
-                              </div>
-                              {isOverBudget && <span style={{ fontSize: '0.75rem', color: 'var(--danger)' }}>¡Presupuesto excedido!</span>}
-                            </>
-                          )}
-                          {isVariable && (
-                            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Presupuesto Variable (Sin límite definido)</span>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div>
+        <h2 className={styles.sectionTitle}>Presupuestos Asignados</h2>
+        <div className={styles.budgetsGrid}>
+          {allBudgets.length === 0 ? (
+            <div className={styles.emptyState}>
+              No has asignado presupuestos a ninguna cuenta.
             </div>
-          ))
-        )}
+          ) : (
+            allBudgets.map(b => {
+              const isVariable = b.amount === 0;
+              const progress = isVariable ? 0 : Math.min((b.spent / b.amount) * 100, 100);
+              const isOverBudget = !isVariable && b.spent > b.amount;
+              
+              return (
+                <div key={b.id} className={styles.budgetCard}>
+                  <div className={styles.budgetHeader}>
+                    <div>
+                      <h4 style={{ fontWeight: 600, fontSize: '1rem' }}>{b.name}</h4>
+                      <span className={styles.budgetAccount}>{b.accountName}</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button onClick={() => router.push(`/transactions?budget=${b.id}`)} style={{padding: '0.2rem', fontSize: '0.875rem', borderRadius: '4px', background: 'var(--bg-primary)', border: '1px solid var(--border-color)', cursor: 'pointer'}}>🔍</button>
+                      <button onClick={() => openEditBudgetModal(b)} style={{padding: '0.2rem', fontSize: '0.875rem', borderRadius: '4px', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--accent-color)'}}>✎</button>
+                    </div>
+                  </div>
+                  
+                  <div style={{ marginTop: '0.5rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', marginBottom: '0.5rem' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>
+                        {isVariable ? `Gastado: ${formatCurrency(b.spent)}` : `${formatCurrency(b.spent)} / ${formatCurrency(b.amount)}`}
+                      </span>
+                      {!isVariable && !isOverBudget && (
+                        <span style={{ color: 'var(--success)', fontWeight: 500 }}>
+                          Restante: {formatCurrency(b.amount - b.spent)}
+                        </span>
+                      )}
+                      {isOverBudget && <span style={{ color: 'var(--danger)', fontWeight: 500 }}>Excedido</span>}
+                    </div>
+                    {!isVariable && (
+                      <div className={styles.budgetProgressBg}>
+                        <div className={styles.budgetProgressFill} style={{ width: `${progress}%`, background: isOverBudget ? 'var(--danger)' : progress > 80 ? 'var(--warning)' : 'var(--accent-color)' }}></div>
+                      </div>
+                    )}
+                    {isVariable && (
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Presupuesto Variable (Sin límite definido)</span>
+                    )}
+                  </div>
+                </div>
+              )
+            })
+          )}
+        </div>
       </div>
 
       {isAccountModalOpen && (

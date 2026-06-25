@@ -29,27 +29,29 @@
 
 .dashboardLayout {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1.5rem;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 2rem;
   align-items: start;
 }
 
-@media (max-width: 1024px) {
-  .dashboardLayout {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 768px) {
-  .dashboardLayout {
-    grid-template-columns: 1fr;
-  }
-}
-
-.col1, .col2, .col3 {
+.col1 {
+  grid-column: span 8;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 2rem;
+}
+
+.col2 {
+  grid-column: span 4;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+@media (max-width: 1024px) {
+  .col1, .col2 {
+    grid-column: span 12;
+  }
 }
 
 .recentTxList {

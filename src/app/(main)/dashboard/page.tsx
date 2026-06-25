@@ -330,39 +330,6 @@ export default function DashboardPage() {
               </div>
             )}
           </div>
-        </div>
-
-        {/* COLUMNA 3 */}
-        <div className={styles.col3}>
-          <div className="card">
-            <h3 className="h3" style={{ marginBottom: '1.5rem' }}>Gasto Mensual</h3>
-            <div style={{ height: 250 }}>
-              {pieData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={pieData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={90}
-                      fill="#8884d8"
-                      paddingAngle={5}
-                      dataKey="value"
-                    >
-                      {pieData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <RechartsTooltip formatter={(value: any) => formatCurrency(Number(value))} />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-secondary)' }}>No hay gastos en presupuestos este mes.</div>
-              )}
-            </div>
-          </div>
 
           <div className="card">
             <h3 className="h3">Metas de Presupuesto</h3>
