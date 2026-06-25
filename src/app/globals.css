@@ -28,32 +28,7 @@
   --card-radius: 20px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    /* Dark Mode equivalent of Clean Apple style */
-    --bg-primary: #000000;
-    --bg-primary-rgb: 0, 0, 0;
-    --bg-secondary: #1c1c1e;
-    --bg-secondary-rgb: 28, 28, 30;
-    --bg-card: rgba(28, 28, 30, 0.85);
-    
-    --text-primary: #f5f5f7;
-    --text-secondary: #86868b;
-    
-    --accent-color: #0a84ff;
-    --accent-hover: #0071e3;
-    
-    --success: #30d158;
-    --danger: #ff453a;
-    --warning: #ffd60a;
 
-    --border-color: rgba(255, 255, 255, 0.08);
-    
-    --shadow-sm: 0 2px 10px rgba(0, 0, 0, 0.2);
-    --shadow-md: 0 8px 30px rgba(0, 0, 0, 0.4);
-    --shadow-lg: 0 20px 40px rgba(0, 0, 0, 0.6);
-  }
-}
 
 html, body {
   height: 100%;
