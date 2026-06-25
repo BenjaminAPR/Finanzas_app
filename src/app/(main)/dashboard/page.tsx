@@ -17,8 +17,10 @@ export default function DashboardPage() {
   
   // Savings State
   const [savingsAccount, setSavingsAccount] = useState<any>(null);
-  const [showSavingsInput, setShowSavingsInput] = useState(false);
+  const [savingsModalOpen, setSavingsModalOpen] = useState(false);
+  const [savingsTab, setSavingsTab] = useState<'transfer' | 'initial'>('transfer');
   const [savingsAmount, setSavingsAmount] = useState('');
+  const [sourceAccountId, setSourceAccountId] = useState('');
   
   // Analytics State
   const [pieData, setPieData] = useState<any[]>([]);
@@ -62,6 +64,7 @@ export default function DashboardPage() {
         if (transactionsData) {
           transactionsData.forEach(tx => {
             const isCurrentCycle = new Date(tx.created_at) > cycleStartDate && tx.description !== '🔄 Cierre de Mes';
+            const isInitialSavings = tx.description === '[AHORRO] Saldo Inicial';
 
             // Calcular balance global
             if (tx.type === 'income') globalBalance += tx.amount;
@@ -80,7 +83,7 @@ export default function DashboardPage() {
 
             // Analytics del ciclo actual
             if (isCurrentCycle) {
-              if (tx.type === 'income' && !tx.is_tithe) monthIncome += tx.amount;
+              if (tx.type === 'income' && !isInitialSavings) monthIncome += tx.amount;
               if (tx.type === 'expense') {
                 monthExpense += tx.amount;
                 if (tx.budget_id) {
@@ -172,25 +175,44 @@ export default function DashboardPage() {
     }
   }
 
-  async function handleAddSavings(e: React.FormEvent) {
+  async function handleSaveSavings(e: React.FormEvent) {
     e.preventDefault();
     if (!savingsAccount || !savingsAmount) return;
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       
-      const { error } = await supabase.from('transactions').insert({
-        type: 'income',
-        amount: parseFloat(savingsAmount),
-        description: 'Ingreso a Ahorros',
-        date: new Date().toISOString().split('T')[0],
-        account_id: savingsAccount.id,
-        user_id: user.id
-      });
-      if (error) throw error;
+      const amountNum = parseFloat(savingsAmount);
+
+      if (savingsTab === 'transfer') {
+        if (!sourceAccountId) {
+          alert('Por favor selecciona una cuenta de origen');
+          return;
+        }
+        const { error } = await supabase.from('transactions').insert({
+          type: 'transfer',
+          amount: amountNum,
+          description: 'Transferencia a Ahorros',
+          date: new Date().toISOString().split('T')[0],
+          account_id: sourceAccountId,
+          destination_account_id: savingsAccount.id,
+          user_id: user.id
+        });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('transactions').insert({
+          type: 'income',
+          amount: amountNum,
+          description: '[AHORRO] Saldo Inicial',
+          date: new Date().toISOString().split('T')[0],
+          account_id: savingsAccount.id,
+          user_id: user.id
+        });
+        if (error) throw error;
+      }
       
       setSavingsAmount('');
-      setShowSavingsInput(false);
+      setSavingsModalOpen(false);
       loadData();
     } catch (err) {
       console.error(err);
@@ -247,15 +269,7 @@ export default function DashboardPage() {
                <div className={styles.amount}>
                  {formatCurrency(savingsAccount.balance)}
                </div>
-               {!showSavingsInput ? (
-                 <button className="btn-secondary" onClick={() => setShowSavingsInput(true)} style={{ width: '100%', padding: '0.5rem', fontSize: '0.875rem' }}>+ Ingresar Ahorro</button>
-               ) : (
-                 <form onSubmit={handleAddSavings} style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-                   <input type="number" className="input-field" placeholder="Monto" value={savingsAmount} onChange={e => setSavingsAmount(e.target.value)} required style={{ padding: '0.5rem', fontSize: '0.875rem', flex: 1 }} autoFocus />
-                   <button type="submit" className="btn-primary" style={{ padding: '0.5rem 1rem', fontSize: '0.875rem' }}>Guardar</button>
-                   <button type="button" className="btn-secondary" onClick={() => setShowSavingsInput(false)} style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem' }}>✕</button>
-                 </form>
-               )}
+               <button className="btn-secondary" onClick={() => setSavingsModalOpen(true)} style={{ width: '100%', padding: '0.75rem', fontSize: '0.95rem' }}>+ Ingresar Ahorro</button>
              </>
           )}
         </div>
@@ -343,6 +357,76 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {savingsModalOpen && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal}>
+            <h2 className="h2" style={{ marginBottom: '1.5rem' }}>Ingresar Ahorro</h2>
+            
+            <div className={styles.modalTabs} style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem' }}>
+              <button 
+                className={savingsTab === 'transfer' ? 'btn-primary' : 'btn-secondary'} 
+                onClick={() => setSavingsTab('transfer')}
+                style={{ flex: 1, padding: '0.5rem' }}
+              >
+                Transferir
+              </button>
+              <button 
+                className={savingsTab === 'initial' ? 'btn-primary' : 'btn-secondary'} 
+                onClick={() => setSavingsTab('initial')}
+                style={{ flex: 1, padding: '0.5rem' }}
+              >
+                Ajuste Directo
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveSavings}>
+              {savingsTab === 'transfer' && (
+                <div className={styles.formGroup} style={{ marginBottom: '1rem' }}>
+                  <label className="input-label">Desde Cuenta</label>
+                  <select 
+                    className="input-field" 
+                    value={sourceAccountId} 
+                    onChange={(e) => setSourceAccountId(e.target.value)}
+                    required
+                  >
+                    <option value="">Selecciona cuenta origen</option>
+                    {accounts.filter(a => a.id !== savingsAccount?.id).map(a => (
+                      <option key={a.id} value={a.id}>{a.name} ({formatCurrency(a.balance)})</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {savingsTab === 'initial' && (
+                <div style={{ marginBottom: '1rem' }}>
+                  <p className="text-secondary" style={{ fontSize: '0.875rem' }}>
+                    Esto registrará el dinero que ya tenías sin afectar tus reportes de ingresos mensuales.
+                  </p>
+                </div>
+              )}
+
+              <div className={styles.formGroup} style={{ marginBottom: '1.5rem' }}>
+                <label className="input-label">Monto</label>
+                <input 
+                  type="number" 
+                  className="input-field" 
+                  placeholder="0" 
+                  value={savingsAmount} 
+                  onChange={e => setSavingsAmount(e.target.value)} 
+                  required 
+                  min="1"
+                />
+              </div>
+
+              <div className={styles.modalActions} style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+                <button type="button" className="btn-secondary" onClick={() => setSavingsModalOpen(false)}>Cancelar</button>
+                <button type="submit" className="btn-primary">Guardar Ahorro</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -54,7 +54,7 @@ export default function ReportsPage() {
           cycleStartDate = new Date(tx.created_at);
         } else {
           // Add to current cycle
-          if (tx.type === 'income') currentCycleIncome += tx.amount;
+          if (tx.type === 'income' && tx.description !== '[AHORRO] Saldo Inicial') currentCycleIncome += tx.amount;
           if (tx.type === 'expense') currentCycleExpense += tx.amount;
         }
       });
