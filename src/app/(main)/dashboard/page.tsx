@@ -29,6 +29,7 @@ export default function DashboardPage() {
   const [projectedExpenses, setProjectedExpenses] = useState(0);
   const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
   const [budgetGoals, setBudgetGoals] = useState<any[]>([]);
+  const [lastCierreData, setLastCierreData] = useState<any>(null);
 
   useEffect(() => {
     loadData();
@@ -56,6 +57,7 @@ export default function DashboardPage() {
         const sortedTx = transactionsData ? [...transactionsData].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()) : [];
         const lastReset = sortedTx.find(tx => tx.description === '🔄 Cierre de Mes');
         const cycleStartDate = lastReset ? new Date(lastReset.created_at) : new Date(0);
+        setLastCierreData(lastReset || null);
 
         let globalBalance = 0;
         let processedAccounts = accountsData?.map(acc => ({...acc, balance: 0})) || [];
@@ -207,6 +209,32 @@ export default function DashboardPage() {
     }
   }
 
+  async function handleUndoCloseMonth() {
+    if (!lastCierreData) return;
+    if (!window.confirm('¿Estás seguro de que quieres deshacer el último cierre de mes? Se eliminará la marca de cierre y todos los rollovers generados en ese momento.')) return;
+    try {
+      // Find all rollovers created strictly after the last Cierre
+      const { data: txsToDelete } = await supabase
+        .from('transactions')
+        .select('id')
+        .eq('description', '🔄 Rollover')
+        .gt('created_at', lastCierreData.created_at);
+
+      const idsToDelete = [lastCierreData.id];
+      if (txsToDelete) {
+        idsToDelete.push(...txsToDelete.map(t => t.id));
+      }
+
+      const { error } = await supabase.from('transactions').delete().in('id', idsToDelete);
+      if (error) throw error;
+
+      loadData();
+    } catch (err) {
+      console.error(err);
+      alert('Error al deshacer el cierre');
+    }
+  }
+
   async function handleCreateSavingsWallet() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -281,6 +309,15 @@ export default function DashboardPage() {
           <p className="text-secondary">Aquí está el resumen financiero de tu hogar.</p>
         </div>
         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+          {lastCierreData && (
+            <button 
+              onClick={handleUndoCloseMonth}
+              style={{ background: 'transparent', border: '1px solid var(--danger)', borderRadius: '0.75rem', padding: '0.75rem 1rem', color: 'var(--danger)', cursor: 'pointer', fontWeight: 500 }}
+              title="Deshacer último cierre"
+            >
+              ↩ Deshacer Cierre
+            </button>
+          )}
           <button 
             onClick={handleCloseMonth}
             style={{ background: 'transparent', border: '1px solid var(--border-color)', borderRadius: '0.75rem', padding: '0.75rem 1rem', color: 'var(--text-secondary)', cursor: 'pointer', fontWeight: 500 }}
