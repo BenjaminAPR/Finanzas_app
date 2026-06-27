@@ -120,7 +120,7 @@ export default function AccountsPage() {
 
   async function handleSaveBudget(e: React.FormEvent) {
     e.preventDefault();
-    if (!selectedAccountId && !editingBudgetId) return;
+    if (!newBudgetName.trim()) return;
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
