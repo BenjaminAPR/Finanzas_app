@@ -147,9 +147,9 @@ export default function AccountsPage() {
       
       closeBudgetModal();
       loadAccounts();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Error guardando presupuesto');
+      setErrorMsg('Error guardando presupuesto: ' + (err.message || JSON.stringify(err)));
     }
   }
 
@@ -165,7 +165,10 @@ export default function AccountsPage() {
     }
   }
 
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
   function openNewBudgetModal() {
+    setErrorMsg(null);
     setEditingBudgetId(null);
     setNewBudgetName('');
     setNewBudgetAmount('');
@@ -173,6 +176,7 @@ export default function AccountsPage() {
   }
 
   function openEditBudgetModal(budget: any) {
+    setErrorMsg(null);
     setSelectedAccountId(budget.account_id);
     setEditingBudgetId(budget.id);
     setNewBudgetName(budget.name);
@@ -330,6 +334,11 @@ export default function AccountsPage() {
             <p className="text-secondary" style={{fontSize: '0.875rem', marginTop: '-1rem'}}>
               Crea un "sobre virtual" dentro de esta cuenta. Si el monto varía mes a mes, puedes dejarlo en 0 o actualizarlo cuando cambie.
             </p>
+            {errorMsg && (
+              <div style={{ padding: '0.75rem', background: 'rgba(220, 38, 38, 0.1)', color: 'var(--danger)', borderRadius: '0.5rem', marginBottom: '1rem', fontSize: '0.875rem' }}>
+                {errorMsg}
+              </div>
+            )}
             <form onSubmit={handleSaveBudget} className={styles.form}>
               <div className="input-group">
                 <label className="input-label">Nombre del presupuesto</label>
