@@ -266,9 +266,9 @@ export default function AccountsPage() {
                       </span>
                     </div>
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <button onClick={() => router.push(`/transactions?budget=${b.id}`)} style={{padding: '0.2rem', fontSize: '0.875rem', borderRadius: '4px', background: 'var(--bg-primary)', border: '1px solid var(--border-color)', cursor: 'pointer', title: 'Ver movimientos'}}>🔍</button>
-                      <button onClick={() => openEditBudgetModal(b)} style={{padding: '0.2rem', fontSize: '0.875rem', borderRadius: '4px', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--accent-color)', title: 'Editar presupuesto'}}>✎</button>
-                      <button onClick={() => handleDeleteBudget(b.id)} style={{padding: '0.2rem', fontSize: '0.875rem', borderRadius: '4px', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--danger)', title: 'Eliminar presupuesto'}}>🗑️</button>
+                      <button onClick={() => router.push(`/transactions?budget=${b.id}`)} style={{padding: '0.2rem', fontSize: '0.875rem', borderRadius: '4px', background: 'var(--bg-primary)', border: '1px solid var(--border-color)', cursor: 'pointer'}} title="Ver movimientos">🔍</button>
+                      <button onClick={() => openEditBudgetModal(b)} style={{padding: '0.2rem', fontSize: '0.875rem', borderRadius: '4px', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--accent-color)'}} title="Editar presupuesto">✎</button>
+                      <button onClick={() => handleDeleteBudget(b.id)} style={{padding: '0.2rem', fontSize: '0.875rem', borderRadius: '4px', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--danger)'}} title="Eliminar presupuesto">🗑️</button>
                     </div>
                   </div>
                   
