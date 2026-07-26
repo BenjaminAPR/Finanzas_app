@@ -17,10 +17,11 @@ export default function MainLayout({ children }: { children: ReactNode }) {
 
   const navItems = [
     { label: 'Dashboard', path: '/dashboard', icon: '📊' },
-    { label: 'Cuentas y Presupuestos', path: '/accounts', icon: '💳' },
+    { label: 'Cuentas', path: '/accounts', icon: '💳' },
     { label: 'Movimientos', path: '/transactions', icon: '💸' },
     { label: 'Deudas', path: '/debts', icon: '📉' },
     { label: 'Reportes', path: '/reports', icon: '📈' },
+    { label: 'Configuración', path: '/settings', icon: '⚙️' },
   ];
 
   return (

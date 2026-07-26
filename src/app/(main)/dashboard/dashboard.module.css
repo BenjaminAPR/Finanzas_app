@@ -1,20 +1,20 @@
 .dashboard {
   display: flex;
   flex-direction: column;
-  gap: 2.5rem;
-  animation: fadeIn 0.4s ease;
+  gap: 3rem;
+  animation: fadeIn 0.5s ease-out;
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(20px); filter: blur(4px); }
+  to { opacity: 1; transform: translateY(0); filter: blur(0); }
 }
 
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 1rem;
+  gap: 1.5rem;
   flex-wrap: wrap;
 }
 
@@ -25,12 +25,19 @@
   height: 50vh;
   color: var(--text-secondary);
   font-size: 1.25rem;
+  animation: pulse 2s infinite ease-in-out;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.5; }
+  50% { opacity: 1; }
+  100% { opacity: 0.5; }
 }
 
 .dashboardLayout {
   display: grid;
   grid-template-columns: repeat(12, 1fr);
-  gap: 2rem;
+  gap: 2.5rem;
   align-items: start;
 }
 
@@ -38,14 +45,14 @@
   grid-column: span 8;
   display: flex;
   flex-direction: column;
-  gap: 2rem;
+  gap: 2.5rem;
 }
 
 .col2 {
   grid-column: span 4;
   display: flex;
   flex-direction: column;
-  gap: 2rem;
+  gap: 2.5rem;
 }
 
 @media (max-width: 1024px) {
@@ -54,22 +61,118 @@
   }
 }
 
+.balanceCard {
+  display: flex;
+  justify-content: space-between;
+  align-items: stretch;
+  background: linear-gradient(145deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.9));
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  box-shadow: 0 10px 30px -10px rgba(59, 130, 246, 0.2);
+  padding: 2.5rem;
+}
+
+.balanceCard::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 2px;
+  background: var(--accent-gradient);
+}
+
+.balanceCardMain {
+  flex: 1;
+}
+
+.balanceCardMain h3 {
+  color: var(--text-secondary);
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.balanceCardMain .amount {
+  font-size: 4.5rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  background: var(--accent-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin: 0.5rem 0 1.5rem 0;
+  text-shadow: 0 0 40px rgba(59, 130, 246, 0.3);
+}
+
+.balanceCardSub {
+  text-align: right;
+  border-left: 1px solid var(--border-light);
+  padding-left: 2.5rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.balanceCardSub h3 {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.balanceCardSub .amount {
+  font-size: 2rem;
+  color: var(--text-primary);
+  margin: 0.5rem 0;
+}
+
+@media (max-width: 768px) {
+  .balanceCard {
+    flex-direction: column;
+    padding: 1.5rem;
+  }
+  .balanceCardMain .amount {
+    font-size: 3rem;
+  }
+  .balanceCardSub {
+    text-align: left;
+    border-left: none;
+    padding-left: 0;
+    border-top: 1px solid var(--border-light);
+    padding-top: 1.5rem;
+    margin-top: 1.5rem;
+  }
+}
+
+.trend {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  color: var(--success);
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .recentTxList {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  margin-top: 1rem;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
 }
 
 .recentTxItem {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.85rem;
-  background: var(--bg-primary);
-  border-radius: 0.75rem;
-  font-size: 0.875rem;
+  padding: 1rem 1.25rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-light);
+  border-radius: 1rem;
   transition: all 0.2s;
+}
+
+.recentTxItem:hover {
+  background: rgba(255, 255, 255, 0.05);
+  transform: translateX(4px);
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
 .txInfo {
@@ -80,179 +183,32 @@
 
 .txIcon {
   font-size: 1.25rem;
-  background: var(--bg-secondary);
-  padding: 0.5rem;
-  border-radius: 0.5rem;
+  background: rgba(0,0,0,0.2);
+  padding: 0.75rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border-light);
 }
 
 .txDetails {
   display: flex;
   flex-direction: column;
+  gap: 0.2rem;
 }
 
 .txTitle {
   font-weight: 600;
+  font-size: 1rem;
   color: var(--text-primary);
 }
 
 .txDate {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   color: var(--text-secondary);
 }
 
 .txAmount {
-  font-weight: 600;
-}
-
-@media (max-width: 768px) {
-  .recentTxItem {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.75rem;
-  }
-  .txAmount {
-    width: 100%;
-    text-align: right;
-    border-top: 1px solid var(--border-color);
-    padding-top: 0.5rem;
-  }
-}
-
-.budgetGoalsList {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-  margin-top: 1rem;
-}
-
-.budgetGoal {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.budgetGoalHeader {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.budgetBarBg {
-  height: 6px;
-  background: var(--border-color);
-  border-radius: 999px;
-  overflow: hidden;
-}
-
-.budgetBarFill {
-  height: 100%;
-  background: var(--accent-color);
-  border-radius: 999px;
-  transition: width 0.5s ease;
-}
-
-.budgetGoalSub {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-}
-
-.amount {
-  font-size: 3.5rem;
   font-weight: 700;
-  letter-spacing: -0.025em;
-  margin: 1rem 0;
-}
-
-.balanceCard {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 2rem;
-}
-
-.balanceCardMain {
-  flex: 1;
-}
-
-.balanceCardMain h3 {
-  color: var(--text-secondary);
-  font-size: 0.875rem;
-}
-
-.balanceCardMain .amount {
-  font-size: 3rem;
-  margin-top: 0.25rem;
-  margin-bottom: 0.5rem;
-}
-
-.balanceCardSub {
-  text-align: right;
-  border-left: 1px solid var(--border-color);
-  padding-left: 2rem;
-}
-
-.balanceCardSub h3 {
-  color: var(--text-secondary);
-  font-size: 0.875rem;
-}
-
-.balanceCardSub .amount {
-  font-size: 1.5rem;
-  color: var(--text-primary);
-  margin-top: 0.25rem;
-  margin-bottom: 0.5rem;
-}
-
-@media (max-width: 768px) {
-  .amount {
-    font-size: 2.5rem;
-  }
-  
-  .balanceCard {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 1.5rem;
-  }
-  
-  .balanceCardSub {
-    text-align: left;
-    border-left: none;
-    padding-left: 0;
-    border-top: 1px solid var(--border-color);
-    padding-top: 1.5rem;
-    width: 100%;
-  }
-  
-  .balanceCardMain .amount {
-    font-size: 2.5rem;
-  }
-}
-
-.cardHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-
-
-.cardFooter {
-  display: flex;
-  align-items: center;
-  font-size: 0.875rem;
-}
-
-.trend {
-  background: var(--bg-secondary);
-  box-shadow: var(--shadow-sm);
-  color: var(--text-secondary);
-  padding: 0.35rem 0.85rem;
-  border-radius: 999px;
-  font-weight: 500;
+  font-size: 1.1rem;
 }
 
 .accountList {
@@ -269,68 +225,125 @@
   justify-content: space-between;
   align-items: center;
   padding: 1.25rem;
-  background: var(--bg-card);
-  box-shadow: var(--shadow-sm);
-  border-radius: 1rem;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border-light);
+  border-radius: 1.25rem;
+  transition: all 0.3s;
 }
 
 .accountItem:hover {
   transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
+  background: rgba(255,255,255,0.05);
+  border-color: rgba(255,255,255,0.1);
 }
 
 .accountInfo {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 1.25rem;
 }
 
 .accountIcon {
   font-size: 1.5rem;
-  background: var(--bg-primary);
-  padding: 0.85rem;
+  background: rgba(0,0,0,0.3);
+  padding: 1rem;
   border-radius: 1rem;
-  box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
 }
 
 .accountName {
   font-weight: 600;
+  font-size: 1.05rem;
   color: var(--text-primary);
 }
 
 .accountType {
-  font-size: 0.875rem;
+  font-size: 0.85rem;
   color: var(--text-secondary);
   text-transform: capitalize;
+  margin-top: 0.2rem;
 }
 
 .accountBalance {
-  font-weight: 600;
+  font-weight: 700;
   font-size: 1.25rem;
+  background: var(--text-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.budgetGoalsList {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.budgetGoal {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.budgetGoalHeader {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.budgetBarBg {
+  height: 8px;
+  background: rgba(0,0,0,0.3);
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid var(--border-light);
+}
+
+.budgetBarFill {
+  height: 100%;
+  background: var(--accent-gradient);
+  border-radius: 999px;
+  transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+}
+
+.budgetGoalSub {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-weight: 500;
 }
 
 .modalOverlay {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.4);
-  backdrop-filter: blur(4px);
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(8px);
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 1000;
-  animation: fadeIn 0.2s ease;
+  animation: fadeIn 0.3s ease;
 }
 
 .modal {
-  background: var(--bg-primary);
-  padding: 2rem;
-  border-radius: var(--card-radius);
+  background: var(--bg-secondary);
+  padding: 2.5rem;
+  border-radius: 24px;
   width: 90%;
-  max-width: 400px;
-  box-shadow: var(--shadow-lg);
-  border: 1px solid var(--border-color);
+  max-width: 450px;
+  box-shadow: var(--shadow-lg), 0 0 40px rgba(0,0,0,0.5);
+  border: 1px solid var(--border-light);
   max-height: 90vh;
   overflow-y: auto;
 }
 
+.modalActions {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  margin-top: 2rem;
+}

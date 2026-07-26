@@ -1,20 +1,20 @@
 .container {
   display: flex;
   flex-direction: column;
-  gap: 2.5rem;
-  animation: fadeIn 0.4s ease;
+  gap: 3rem;
+  animation: fadeIn 0.5s ease-out;
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(20px); filter: blur(4px); }
+  to { opacity: 1; transform: translateY(0); filter: blur(0); }
 }
 
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 1rem;
+  gap: 1.5rem;
   flex-wrap: wrap;
 }
 
@@ -25,16 +25,19 @@
   height: 50vh;
   color: var(--text-secondary);
   font-size: 1.25rem;
+  animation: pulse 2s infinite ease-in-out;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.5; }
+  50% { opacity: 1; }
+  100% { opacity: 0.5; }
 }
 
 .grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 1.5rem;
-}
-
-.chartCard {
-  /* card style applied from globals */
+  gap: 2.5rem;
 }
 
 .feedList {
@@ -48,37 +51,41 @@
   justify-content: space-between;
   align-items: center;
   padding: 1.5rem;
-  background: var(--bg-card);
-  border-radius: 1rem;
-  box-shadow: var(--shadow-sm);
-  transition: all 0.2s;
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid var(--border-light);
+  border-radius: 1.25rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
 }
 
 .feedItem:hover {
   transform: translateY(-2px);
   box-shadow: var(--shadow-md);
+  border-color: rgba(255,255,255,0.15);
+  background: rgba(30, 41, 59, 0.9);
 }
 
 .feedDetails {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.5rem;
 }
 
 .feedTitle {
   font-weight: 600;
   color: var(--text-primary);
-  font-size: 1.1rem;
+  font-size: 1.15rem;
 }
 
 .feedMeta {
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   color: var(--text-secondary);
 }
 
 .feedAmounts {
   display: flex;
-  gap: 2rem;
+  gap: 2.5rem;
   text-align: right;
 }
 
@@ -88,22 +95,27 @@
 }
 
 .amountLabel {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   color: var(--text-secondary);
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.35rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .amountPositive {
   color: var(--success);
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 1.1rem;
 }
 
 .amountNegative {
   color: var(--danger);
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 1.1rem;
 }
 
 .amountNeutral {
   color: var(--text-primary);
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 1.1rem;
 }
