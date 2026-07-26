@@ -136,25 +136,25 @@ export default function TransactionsPage() {
     <div className={styles.page}>
       <header className={styles.header}>
         <div>
-          <h1 className="h2">Movimientos</h1>
-          <p className="text-secondary">Registra tus ingresos, egresos y transferencias.</p>
+          <h1 className="h2">Historial de Transacciones</h1>
+          <p className="text-secondary">Revisa y registra tus ingresos, egresos y transferencias.</p>
         </div>
         <button className="btn-primary" onClick={() => setIsModalOpen(true)}>
-          <span>+</span> Registrar Movimiento
+          Nueva Transacción
         </button>
       </header>
 
-      <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
-        <select className="input-field" style={{ flex: '1 1 200px', padding: '0.5rem 1rem' }} value={filterAccountId} onChange={e => setFilterAccountId(e.target.value)}>
-          <option value="">Todas las Cuentas</option>
+      <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
+        <select className="input-field" style={{ flex: '1 1 200px' }} value={filterAccountId} onChange={e => setFilterAccountId(e.target.value)}>
+          <option value="">Todas las Billeteras</option>
           {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.name}</option>)}
         </select>
-        <select className="input-field" style={{ flex: '1 1 200px', padding: '0.5rem 1rem' }} value={filterBudgetId} onChange={e => setFilterBudgetId(e.target.value)}>
-          <option value="">Todos los Presupuestos</option>
+        <select className="input-field" style={{ flex: '1 1 200px' }} value={filterBudgetId} onChange={e => setFilterBudgetId(e.target.value)}>
+          <option value="">Todos los Límites</option>
           {budgets.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
         </select>
         {(filterAccountId || filterBudgetId) && (
-          <button className="btn-secondary" style={{ flex: '1 1 100%', padding: '0.5rem 1rem' }} onClick={() => { setFilterAccountId(''); setFilterBudgetId(''); }}>
+          <button className="btn-secondary" style={{ flex: '1 1 100%' }} onClick={() => { setFilterAccountId(''); setFilterBudgetId(''); }}>
             Limpiar Filtros
           </button>
         )}

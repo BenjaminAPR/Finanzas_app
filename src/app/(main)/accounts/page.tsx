@@ -188,41 +188,41 @@ export default function AccountsPage() {
     <div className={styles.page}>
       <header className={styles.header}>
         <div>
-          <h1 className="h2">Cuentas y Presupuestos</h1>
-          <p className="text-secondary">Administra tus cuentas y asigna límites de gastos para tu ciclo actual.</p>
+          <h1 className="h2">Billeteras y Límites</h1>
+          <p className="text-secondary">Administra tus billeteras y asigna límites de gastos para tu ciclo actual.</p>
         </div>
         <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
           <button className="btn-secondary" onClick={() => openNewBudgetModal()}>
-            <span>+</span> Nuevo Presupuesto
+            Nuevo Límite
           </button>
           <button className="btn-primary" onClick={() => setIsAccountModalOpen(true)}>
-            <span>+</span> Nueva Cuenta
+            Nueva Billetera
           </button>
         </div>
       </header>
 
       <div>
-        <h2 className={styles.sectionTitle}>Tus Cuentas</h2>
+        <h2 className={styles.sectionTitle}>Mis Billeteras</h2>
         <div className={styles.accountsGrid}>
           {accounts.length === 0 ? (
             <div className={styles.emptyState}>
-              No tienes cuentas creadas. Haz clic en "Nueva Cuenta" para comenzar.
+              No tienes billeteras creadas. Haz clic en "Nueva Billetera" para comenzar.
             </div>
           ) : (
             accounts.map(account => (
               <div key={account.id} className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', cursor: 'pointer' }} onClick={() => router.push(`/transactions?account=${account.id}`)}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <span style={{ fontSize: '1.5rem', background: 'rgba(255,255,255,0.05)', padding: '0.75rem', borderRadius: '12px' }}>
+                    <span style={{ fontSize: '1.5rem', background: 'var(--bg-primary)', padding: '0.5rem', borderRadius: '8px', border: '1px solid var(--border-light)' }}>
                       {account.type === 'Cuenta de Ahorro' ? '🐷' : '🏦'}
                     </span>
                     <div>
-                      <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)' }}>{account.name}</h3>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{account.type}</span>
+                      <h3 style={{ fontSize: '1rem', fontWeight: 500, color: 'var(--text-primary)' }}>{account.name}</h3>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{account.type}</span>
                     </div>
                   </div>
                 </div>
-                <div style={{ fontSize: '1.75rem', fontWeight: 700, marginTop: '0.5rem', color: 'var(--text-primary)' }}>
+                <div style={{ fontSize: '1.5rem', fontWeight: 600, marginTop: '0.5rem', color: 'var(--text-primary)' }}>
                   {formatCurrency(account.balance)}
                 </div>
               </div>
@@ -232,11 +232,11 @@ export default function AccountsPage() {
       </div>
 
       <div>
-        <h2 className={styles.sectionTitle}>Presupuestos del Ciclo</h2>
+        <h2 className={styles.sectionTitle}>Límites de Gasto</h2>
         <div className={styles.budgetsGrid}>
           {globalBudgets.length === 0 ? (
             <div className={styles.emptyState}>
-              No has creado presupuestos. Úsalos para limitar tus gastos en tu ciclo personal.
+              No has creado límites. Úsalos para controlar tus gastos en tu ciclo personal.
             </div>
           ) : (
             globalBudgets.map(b => {

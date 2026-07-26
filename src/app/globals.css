@@ -1,36 +1,36 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
 
 :root {
-  /* Premium Dark Theme */
-  --bg-primary: #0f172a;
-  --bg-secondary: #1e293b;
-  --bg-card: rgba(30, 41, 59, 0.7);
-  --bg-hover: rgba(51, 65, 85, 0.8);
+  /* Sober Professional Dark Theme */
+  --bg-primary: #0a0a0a;
+  --bg-secondary: #171717;
+  --bg-card: #171717;
+  --bg-hover: #262626;
   
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
+  --text-primary: #ededed;
+  --text-secondary: #a1a1aa;
   
-  --accent-color: #3b82f6;
-  --accent-hover: #2563eb;
-  --accent-gradient: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  --accent-color: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-gradient: #2563eb; /* No gradient, just solid fallback */
   
   --success: #10b981;
-  --success-bg: rgba(16, 185, 129, 0.15);
+  --success-bg: rgba(16, 185, 129, 0.1);
   --danger: #ef4444;
-  --danger-bg: rgba(239, 68, 68, 0.15);
+  --danger-bg: rgba(239, 68, 68, 0.1);
   --warning: #f59e0b;
   
-  --border-color: rgba(255, 255, 255, 0.1);
-  --border-light: rgba(255, 255, 255, 0.05);
+  --border-color: #262626;
+  --border-light: #262626;
   
-  --shadow-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
-  --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
-  --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.2);
   
-  --shadow-glow: 0 0 20px rgba(59, 130, 246, 0.4);
+  --shadow-glow: none;
 
-  --btn-radius: 12px;
-  --card-radius: 20px;
+  --btn-radius: 6px;
+  --card-radius: 8px;
 }
 
 html, body {
@@ -40,10 +40,6 @@ html, body {
 body {
   font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   background-color: var(--bg-primary);
-  background-image: 
-    radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.15) 0px, transparent 50%),
-    radial-gradient(at 100% 100%, rgba(139, 92, 246, 0.15) 0px, transparent 50%);
-  background-attachment: fixed;
   color: var(--text-primary);
   margin: 0;
   padding: 0;
@@ -58,79 +54,60 @@ body {
 
 /* UI Components */
 .btn-primary {
-  background: var(--accent-gradient);
+  background: var(--accent-color);
   color: #ffffff;
-  border: none;
-  padding: 0.75rem 1.75rem;
-  border-radius: var(--btn-radius);
-  font-weight: 600;
-  font-size: 0.95rem;
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.6rem;
-  box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
-  position: relative;
-  overflow: hidden;
-}
-
-.btn-primary::after {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: linear-gradient(rgba(255,255,255,0.1), transparent);
-  opacity: 0;
-  transition: opacity 0.3s;
-}
-
-.btn-primary:hover {
-  transform: translateY(-2px) scale(1.02);
-  box-shadow: var(--shadow-glow);
-}
-
-.btn-primary:hover::after {
-  opacity: 1;
-}
-
-.btn-primary:active {
-  transform: translateY(0) scale(0.98);
-}
-
-.btn-secondary {
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
-  padding: 0.75rem 1.5rem;
+  border: 1px solid transparent;
+  padding: 0.65rem 1.2rem;
   border-radius: var(--btn-radius);
   font-weight: 500;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.2s ease;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  backdrop-filter: blur(8px);
+}
+
+.btn-primary:hover {
+  background: var(--accent-hover);
+}
+
+.btn-primary:active {
+  transform: scale(0.98);
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  padding: 0.65rem 1.2rem;
+  border-radius: var(--btn-radius);
+  font-weight: 500;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
 }
 
 .btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
-  transform: translateY(-1px);
+  background: var(--bg-hover);
+  border-color: #3f3f46;
 }
 
 .btn-danger {
-  background: var(--danger-bg);
+  background: transparent;
   color: var(--danger);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  padding: 0.75rem 1.5rem;
+  border: 1px solid var(--danger-bg);
+  padding: 0.65rem 1.2rem;
   border-radius: var(--btn-radius);
-  font-weight: 600;
-  font-size: 0.95rem;
+  font-weight: 500;
+  font-size: 0.9rem;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -138,93 +115,64 @@ body {
 }
 
 .btn-danger:hover {
-  background: var(--danger);
-  color: white;
-  box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
-  transform: translateY(-1px);
+  background: var(--danger-bg);
 }
 
 .card {
   background: var(--bg-card);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--border-light);
+  border: 1px solid var(--border-color);
   border-radius: var(--card-radius);
-  padding: 1.75rem;
-  box-shadow: var(--shadow-md);
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  overflow: hidden;
-}
-
-.card::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0; height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
-  opacity: 0;
-  transition: opacity 0.4s;
+  padding: 1.5rem;
+  transition: border-color 0.2s ease;
 }
 
 .card:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-lg);
-  border-color: rgba(255, 255, 255, 0.15);
-  background: rgba(30, 41, 59, 0.85);
-}
-
-.card:hover::before {
-  opacity: 1;
+  border-color: #3f3f46;
 }
 
 .input-field {
   width: 100%;
-  padding: 0.85rem 1.2rem;
+  padding: 0.75rem 1rem;
   border-radius: var(--btn-radius);
   border: 1px solid var(--border-color);
-  background: rgba(15, 23, 42, 0.6);
+  background: var(--bg-primary);
   color: var(--text-primary);
   font-family: inherit;
-  font-size: 1rem;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  font-size: 0.95rem;
+  transition: all 0.2s ease;
   outline: none;
 }
 
 .input-field:focus {
   border-color: var(--accent-color);
-  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15);
-  background: rgba(15, 23, 42, 0.9);
+  background: var(--bg-hover);
 }
 
 .input-field::placeholder {
-  color: rgba(148, 163, 184, 0.5);
+  color: var(--text-secondary);
 }
 
 .input-label {
   display: block;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: 500;
   color: var(--text-secondary);
-  margin-bottom: 0.5rem;
-  letter-spacing: 0.02em;
+  margin-bottom: 0.4rem;
 }
 
 /* Typography utilities */
-.h1 { font-size: 2.5rem; font-weight: 700; letter-spacing: -0.03em; line-height: 1.1; }
-.h2 { font-size: 2rem; font-weight: 600; letter-spacing: -0.025em; line-height: 1.2; }
-.h3 { font-size: 1.35rem; font-weight: 600; letter-spacing: -0.01em; line-height: 1.3; }
+.h1 { font-size: 2rem; font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; color: var(--text-primary); }
+.h2 { font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; color: var(--text-primary); }
+.h3 { font-size: 1.1rem; font-weight: 500; letter-spacing: -0.01em; line-height: 1.3; color: var(--text-primary); }
 
 .text-gradient {
-  background: var(--accent-gradient);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--text-primary); /* Removed gradient */
   display: inline-block;
 }
 
 .text-secondary {
   color: var(--text-secondary);
-  line-height: 1.6;
+  line-height: 1.5;
 }
 
 /* Scrollbar styling for a premium feel */
@@ -236,9 +184,9 @@ body {
   background: var(--bg-primary); 
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1); 
+  background: #3f3f46; 
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2); 
+  background: #52525b; 
 }

@@ -16,9 +16,9 @@ export default function MainLayout({ children }: { children: ReactNode }) {
   };
 
   const navItems = [
-    { label: 'Dashboard', path: '/dashboard', icon: '📊' },
-    { label: 'Cuentas', path: '/accounts', icon: '💳' },
-    { label: 'Movimientos', path: '/transactions', icon: '💸' },
+    { label: 'Inicio', path: '/dashboard', icon: '📊' },
+    { label: 'Billeteras y Límites', path: '/accounts', icon: '💳' },
+    { label: 'Historial', path: '/transactions', icon: '💸' },
     { label: 'Deudas', path: '/debts', icon: '📉' },
     { label: 'Reportes', path: '/reports', icon: '📈' },
     { label: 'Configuración', path: '/settings', icon: '⚙️' },
