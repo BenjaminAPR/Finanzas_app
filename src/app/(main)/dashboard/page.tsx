@@ -10,6 +10,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<any>(null);
   const [totalBalance, setTotalBalance] = useState(0);
+  const [totalSavings, setTotalSavings] = useState(0);
   const [monthIncome, setMonthIncome] = useState(0);
   const [monthExpense, setMonthExpense] = useState(0);
   const [accounts, setAccounts] = useState<any[]>([]);
@@ -79,6 +80,14 @@ export default function DashboardPage() {
           }
         });
 
+        // Calculate total savings
+        let tSavings = 0;
+        processedAccounts.forEach(acc => {
+          if (acc.type === 'Cuenta de Ahorro') {
+            tSavings += acc.balance;
+          }
+        });
+
         const bGoals = budgetsData?.map(b => {
           return {
             ...b,
@@ -91,6 +100,7 @@ export default function DashboardPage() {
         setRecentTransactions(validTx.slice(0, 5));
         setAccounts(processedAccounts);
         setTotalBalance(globalBalance);
+        setTotalSavings(tSavings);
         setMonthIncome(mIncome);
         setMonthExpense(mExpense);
       }
@@ -164,7 +174,7 @@ export default function DashboardPage() {
             Reiniciar Ciclo
           </button>
           <button className="btn-primary" onClick={() => router.push('/transactions')}>
-            + Nuevo Movimiento
+            Nueva Transacción
           </button>
         </div>
       </header>
@@ -172,9 +182,15 @@ export default function DashboardPage() {
       {/* TOP METRICS ROW */}
       <div className={styles.topMetrics}>
         <div className="card">
-          <h3 className="h3" style={{ fontSize: '1rem', color: 'var(--text-secondary)' }}>Saldo Total</h3>
+          <h3 className="h3" style={{ fontSize: '1rem', color: 'var(--text-secondary)' }}>Liquidez (Sin Ahorros)</h3>
           <div className={styles.metricAmount} style={{ color: 'var(--text-primary)' }}>
-            {formatCurrency(totalBalance)}
+            {formatCurrency(totalBalance - totalSavings)}
+          </div>
+        </div>
+        <div className="card" style={{ borderColor: 'var(--accent-color)' }}>
+          <h3 className="h3" style={{ fontSize: '1rem', color: 'var(--accent-color)' }}>Ahorros Totales</h3>
+          <div className={styles.metricAmount} style={{ color: 'var(--text-primary)' }}>
+            {formatCurrency(totalSavings)}
           </div>
         </div>
         <div className="card">
