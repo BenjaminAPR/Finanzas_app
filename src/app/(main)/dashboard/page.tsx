@@ -15,6 +15,8 @@ export default function DashboardPage() {
   const [accounts, setAccounts] = useState<any[]>([]);
   const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
   const [budgetGoals, setBudgetGoals] = useState<any[]>([]);
+  const [lastCierreData, setLastCierreData] = useState<any>(null);
+  const [showReviewModal, setShowReviewModal] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -24,28 +26,22 @@ export default function DashboardPage() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        // Fetch profile
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .single();
+        const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
         if (profileData) setProfile(profileData);
 
-        // Fetch accounts, transactions, budgets
         const { data: accountsData } = await supabase.from('accounts').select('*');
         const { data: transactionsData } = await supabase.from('transactions').select('*');
         const { data: budgetsData } = await supabase.from('budgets').select('*');
-
-        const now = new Date();
-        const currentMonth = now.getMonth();
-        const currentYear = now.getFullYear();
 
         const sortedTx = transactionsData 
           ? [...transactionsData].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()) 
           : [];
 
-        // Ignore old "Cierre de Mes" / "Rollover" legacy data for simplicity
+        // Find the last "Cierre de Mes" marker
+        const lastReset = sortedTx.find(tx => tx.description === '🔄 Cierre de Mes');
+        const cycleStartDate = lastReset ? new Date(lastReset.created_at) : new Date(0);
+        setLastCierreData(lastReset || null);
+
         const validTx = sortedTx.filter(tx => tx.description !== '🔄 Cierre de Mes' && tx.description !== '🔄 Rollover');
 
         let globalBalance = 0;
@@ -56,14 +52,12 @@ export default function DashboardPage() {
         let budgetExpenses: Record<string, number> = {};
 
         validTx.forEach(tx => {
-          const txDate = new Date(tx.date || tx.created_at);
-          const isCurrentMonth = txDate.getMonth() === currentMonth && txDate.getFullYear() === currentYear;
+          const txDate = new Date(tx.created_at);
+          const isCurrentCycle = txDate > cycleStartDate;
 
-          // Global Balance Calculation (all time)
           if (tx.type === 'income') globalBalance += tx.amount;
           if (tx.type === 'expense') globalBalance -= tx.amount;
 
-          // Account Balances (all time)
           const originAcc = processedAccounts.find(a => a.id === tx.account_id);
           const destAcc = processedAccounts.find(a => a.id === tx.destination_account_id);
 
@@ -74,8 +68,7 @@ export default function DashboardPage() {
             if (destAcc) destAcc.balance += tx.amount;
           }
 
-          // Analytics (current month only)
-          if (isCurrentMonth) {
+          if (isCurrentCycle) {
             if (tx.type === 'income' && tx.description !== '[AHORRO] Saldo Inicial') mIncome += tx.amount;
             if (tx.type === 'expense') {
               mExpense += tx.amount;
@@ -86,11 +79,10 @@ export default function DashboardPage() {
           }
         });
 
-        // Map budgets for current month
         const bGoals = budgetsData?.map(b => {
           return {
             ...b,
-            amount: b.amount, // strict monthly limit
+            amount: b.amount,
             spent: budgetExpenses[b.id] || 0
           };
         }) || [];
@@ -109,6 +101,43 @@ export default function DashboardPage() {
     }
   }
 
+  async function handleCloseMonth() {
+    if (!window.confirm('¿Estás seguro de que quieres cerrar el ciclo actual? Los medidores de tus presupuestos y gastos del mes volverán a 0, pero tu balance de dinero quedará intacto.')) return;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      
+      const { error } = await supabase.from('transactions').insert({
+        type: 'expense',
+        amount: 0,
+        description: '🔄 Cierre de Mes',
+        date: new Date().toISOString().split('T')[0],
+        user_id: user.id
+      });
+      if (error) throw error;
+      
+      await loadData();
+      setShowReviewModal(true);
+    } catch (err) {
+      console.error(err);
+      alert('Error al cerrar el ciclo');
+    }
+  }
+
+  async function handleUndoCloseMonth() {
+    if (!lastCierreData) return;
+    if (!window.confirm('¿Estás seguro de que quieres deshacer el último cierre? Se eliminará el marcador y los gastos volverán a sumar.')) return;
+    try {
+      const { error } = await supabase.from('transactions').delete().eq('id', lastCierreData.id);
+      if (error) throw error;
+
+      loadData();
+    } catch (err) {
+      console.error(err);
+      alert('Error al deshacer el cierre');
+    }
+  }
+
   const formatCurrency = (val: number) => `$${val.toLocaleString('es-CL')}`;
 
   if (loading) return <div className={styles.loading}>Cargando panel...</div>;
@@ -118,9 +147,24 @@ export default function DashboardPage() {
       <header className={styles.header}>
         <div>
           <h1 className="h2">Hola, {profile?.full_name || 'Usuario'} 👋</h1>
-          <p className="text-secondary">Aquí está el resumen financiero del mes actual.</p>
+          <p className="text-secondary">Resumen de tu ciclo financiero actual.</p>
         </div>
-        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+          {lastCierreData && (
+            <button 
+              onClick={handleUndoCloseMonth}
+              style={{ background: 'transparent', border: '1px solid var(--danger)', borderRadius: '0.75rem', padding: '0.75rem 1rem', color: 'var(--danger)', cursor: 'pointer', fontWeight: 500 }}
+              title="Deshacer último cierre"
+            >
+              ↩ Deshacer Cierre
+            </button>
+          )}
+          <button 
+            onClick={handleCloseMonth}
+            style={{ background: 'transparent', border: '1px solid var(--border-light)', borderRadius: '0.75rem', padding: '0.75rem 1rem', color: 'var(--text-secondary)', cursor: 'pointer', fontWeight: 500 }}
+          >
+            🔄 Cerrar Mes
+          </button>
           <button className="btn-primary" onClick={() => router.push('/transactions')}>
             <span>+</span> Nuevo Movimiento
           </button>
@@ -143,13 +187,13 @@ export default function DashboardPage() {
             </div>
             <div className={styles.balanceCardSub}>
               <div>
-                <h3 className="h3" style={{ fontSize: '0.8rem', color: 'var(--success)' }}>Ingresos del Mes</h3>
+                <h3 className="h3" style={{ fontSize: '0.8rem', color: 'var(--success)' }}>Ingresos del Ciclo</h3>
                 <div className={styles.amount} style={{ fontSize: '1.5rem', color: 'var(--success)' }}>
                   +{formatCurrency(monthIncome)}
                 </div>
               </div>
               <div style={{ marginTop: '1rem' }}>
-                <h3 className="h3" style={{ fontSize: '0.8rem', color: 'var(--danger)' }}>Gastos del Mes</h3>
+                <h3 className="h3" style={{ fontSize: '0.8rem', color: 'var(--danger)' }}>Gastos del Ciclo</h3>
                 <div className={styles.amount} style={{ fontSize: '1.5rem', color: 'var(--danger)' }}>
                   -{formatCurrency(monthExpense)}
                 </div>
@@ -160,7 +204,7 @@ export default function DashboardPage() {
           <div className="card">
             <h3 className="h3">Transacciones Recientes</h3>
             {recentTransactions.length === 0 ? (
-              <p className="text-secondary" style={{ marginTop: '1rem', fontSize: '0.875rem' }}>No hay transacciones recientes.</p>
+              <p className="text-secondary" style={{ marginTop: '1rem', fontSize: '0.875rem' }}>No hay transacciones recientes en este ciclo.</p>
             ) : (
               <div className={styles.recentTxList}>
                 {recentTransactions.map(tx => (
@@ -206,7 +250,7 @@ export default function DashboardPage() {
           </div>
 
           <div className="card">
-            <h3 className="h3">Presupuestos del Mes</h3>
+            <h3 className="h3">Presupuestos del Ciclo</h3>
             <div className={styles.budgetGoalsList}>
               {budgetGoals.length === 0 ? (
                 <p className="text-secondary" style={{ fontSize: '0.875rem' }}>No has creado presupuestos.</p>
@@ -232,6 +276,23 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {showReviewModal && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal}>
+            <h2 className="h2" style={{ marginBottom: '1rem' }}>¡Ciclo Cerrado! 🎯</h2>
+            <p className="text-secondary" style={{ marginBottom: '1.5rem', lineHeight: '1.5' }}>
+              Has reiniciado exitosamente los contadores para este nuevo ciclo. Tus saldos bancarios siguen intactos.
+              <br/><br/>
+              Si tus límites de gastos cambiaron, aprovecha de ajustarlos ahora.
+            </p>
+            <div className={styles.modalActions}>
+              <button className="btn-secondary" onClick={() => setShowReviewModal(false)}>Más tarde</button>
+              <button className="btn-primary" onClick={() => router.push('/accounts')}>Ir a ajustar presupuestos</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

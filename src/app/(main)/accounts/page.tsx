@@ -43,12 +43,12 @@ export default function AccountsPage() {
 
       const { data: txData } = await supabase.from('transactions').select('*');
 
-      const now = new Date();
-      const currentMonth = now.getMonth();
-      const currentYear = now.getFullYear();
+      const sortedTx = txData ? [...txData].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()) : [];
+      const lastReset = sortedTx.find(tx => tx.description === '🔄 Cierre de Mes');
+      const cycleStartDate = lastReset ? new Date(lastReset.created_at) : new Date(0);
 
       // Only process active transactions, ignore legacy rollover/close markers
-      const validTx = txData ? txData.filter(tx => tx.description !== '🔄 Cierre de Mes' && tx.description !== '🔄 Rollover') : [];
+      const validTx = sortedTx.filter(tx => tx.description !== '🔄 Cierre de Mes' && tx.description !== '🔄 Rollover');
 
       let processedAccounts = accData?.map(acc => {
         let balance = 0;
@@ -66,10 +66,10 @@ export default function AccountsPage() {
       let processedBudgets = budgetsData?.map(b => {
         let spent = 0;
         validTx.forEach(tx => {
-          const txDate = new Date(tx.date || tx.created_at);
-          const isCurrentMonth = txDate.getMonth() === currentMonth && txDate.getFullYear() === currentYear;
+          const txDate = new Date(tx.created_at);
+          const isCurrentCycle = txDate > cycleStartDate;
           
-          if (isCurrentMonth && tx.type === 'expense' && tx.budget_id === b.id) {
+          if (isCurrentCycle && tx.type === 'expense' && tx.budget_id === b.id) {
             spent += tx.amount;
           }
         });
@@ -189,7 +189,7 @@ export default function AccountsPage() {
       <header className={styles.header}>
         <div>
           <h1 className="h2">Cuentas y Presupuestos</h1>
-          <p className="text-secondary">Administra tus cuentas y asigna límites de gastos para el mes actual.</p>
+          <p className="text-secondary">Administra tus cuentas y asigna límites de gastos para tu ciclo actual.</p>
         </div>
         <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
           <button className="btn-secondary" onClick={() => openNewBudgetModal()}>
@@ -232,11 +232,11 @@ export default function AccountsPage() {
       </div>
 
       <div>
-        <h2 className={styles.sectionTitle}>Presupuestos Mensuales</h2>
+        <h2 className={styles.sectionTitle}>Presupuestos del Ciclo</h2>
         <div className={styles.budgetsGrid}>
           {globalBudgets.length === 0 ? (
             <div className={styles.emptyState}>
-              No has creado presupuestos. Úsalos para limitar tus gastos mensuales.
+              No has creado presupuestos. Úsalos para limitar tus gastos en tu ciclo personal.
             </div>
           ) : (
             globalBudgets.map(b => {
@@ -250,7 +250,7 @@ export default function AccountsPage() {
                     <div>
                       <h4 style={{ fontWeight: 600, fontSize: '1.1rem', color: 'var(--text-primary)' }}>{b.name}</h4>
                       <span className={styles.budgetAccount} style={{ background: 'transparent', border: '1px solid var(--border-light)', marginTop: '0.5rem' }}>
-                        Límite Mensual
+                        Límite del Ciclo
                       </span>
                     </div>
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -263,7 +263,7 @@ export default function AccountsPage() {
                   <div style={{ marginTop: '0.75rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.75rem' }}>
                       <span style={{ color: 'var(--text-secondary)' }}>
-                        {isVariable ? `Gastado este mes: ${formatCurrency(b.spent)}` : `${formatCurrency(b.spent)} / ${formatCurrency(b.amount)}`}
+                        {isVariable ? `Gastado en ciclo: ${formatCurrency(b.spent)}` : `${formatCurrency(b.spent)} / ${formatCurrency(b.amount)}`}
                       </span>
                       {!isVariable && !isOverBudget && (
                         <span style={{ color: 'var(--success)', fontWeight: 600 }}>
@@ -320,7 +320,7 @@ export default function AccountsPage() {
           <div className={styles.modal}>
             <h3 className="h3">{editingBudgetId ? 'Editar Presupuesto' : 'Crear Presupuesto'}</h3>
             <p className="text-secondary" style={{fontSize: '0.9rem', marginTop: '-0.5rem', marginBottom: '1.5rem'}}>
-              Define cuánto dinero máximo planeas gastar en una categoría específica durante el mes actual.
+              Define cuánto dinero máximo planeas gastar en esta categoría durante tu ciclo financiero.
             </p>
             {errorMsg && (
               <div style={{ padding: '1rem', background: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger)', borderRadius: '0.75rem', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
@@ -333,7 +333,7 @@ export default function AccountsPage() {
                 <input type="text" className="input-field" placeholder="Ej. Supermercado, Luz, Arriendo..." value={newBudgetName} onChange={e => setNewBudgetName(e.target.value)} required />
               </div>
               <div className="input-group">
-                <label className="input-label">Límite Mensual (Opcional)</label>
+                <label className="input-label">Límite del Ciclo (Opcional)</label>
                 <input 
                   type="number" 
                   className="input-field" 
