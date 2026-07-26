@@ -50,7 +50,8 @@ export default function TransactionsPage() {
       }
 
       if (transRes.data) {
-        const enrichedTransactions = transRes.data.map(t => {
+        const validTx = transRes.data.filter(t => t.description !== '🔄 Cierre de Mes' && t.description !== '🔄 Rollover');
+        const enrichedTransactions = validTx.map(t => {
           const account = accRes.data?.find(a => a.id === t.account_id);
           const destAccount = accRes.data?.find(a => a.id === t.destination_account_id);
           const budget = budgRes.data?.find(b => b.id === t.budget_id);
