@@ -204,63 +204,74 @@ export default function TransactionsPage() {
         <div className={styles.modalOverlay}>
           <div className={`card ${styles.modal}`}>
             <h3 className="h3">Nuevo Movimiento</h3>
-            <form onSubmit={handleSubmit} className={styles.form}>
-              
-              <div className={styles.typeSelector}>
-                <button type="button" className={`${styles.typeBtn} ${type === 'expense' ? styles.activeExpense : ''}`} onClick={() => setType('expense')}>Egreso</button>
-                <button type="button" className={`${styles.typeBtn} ${type === 'income' ? styles.activeIncome : ''}`} onClick={() => setType('income')}>Ingreso</button>
-                <button type="button" className={`${styles.typeBtn} ${type === 'transfer' ? styles.activeTransfer : ''}`} onClick={() => setType('transfer')}>Transferencia</button>
+            
+            {accounts.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '2rem 0' }}>
+                <p className="text-secondary" style={{ marginBottom: '1.5rem' }}>
+                  No tienes ninguna billetera creada. Debes crear una primero para poder registrar movimientos.
+                </p>
+                <div className={styles.modalActions} style={{ justifyContent: 'center' }}>
+                  <button type="button" className="btn-secondary" onClick={() => setIsModalOpen(false)}>Cerrar</button>
+                  <button type="button" className="btn-primary" onClick={() => window.location.href = '/accounts'}>Crear Billetera</button>
+                </div>
               </div>
+            ) : (
+              <form onSubmit={handleSubmit} className={styles.form}>
+                
+                <div className={styles.typeSelector}>
+                  <button type="button" className={`${styles.typeBtn} ${type === 'expense' ? styles.activeExpense : ''}`} onClick={() => setType('expense')}>Egreso</button>
+                  <button type="button" className={`${styles.typeBtn} ${type === 'income' ? styles.activeIncome : ''}`} onClick={() => setType('income')}>Ingreso</button>
+                  <button type="button" className={`${styles.typeBtn} ${type === 'transfer' ? styles.activeTransfer : ''}`} onClick={() => setType('transfer')}>Transferencia</button>
+                </div>
 
-              <div className="input-group">
-                <label className="input-label">Monto</label>
-                <input type="number" className="input-field" placeholder="0" value={amount} onChange={e => setAmount(e.target.value)} required />
-              </div>
-
-              <div className="input-group">
-                <label className="input-label">Descripción</label>
-                <input type="text" className="input-field" placeholder="Ej. Supermercado, Sueldo..." value={description} onChange={e => setDescription(e.target.value)} required />
-              </div>
-
-              <div className="input-group">
-                <label className="input-label">Fecha</label>
-                <input type="date" className="input-field" value={date} onChange={e => setDate(e.target.value)} required />
-              </div>
-
-              <div className="input-group">
-                <label className="input-label">{type === 'income' ? 'Cuenta de Destino' : 'Cuenta de Origen'}</label>
-                <select className="input-field" value={accountId} onChange={e => setAccountId(e.target.value)} required>
-                  {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.name}</option>)}
-                </select>
-              </div>
-
-              {type === 'transfer' && (
                 <div className="input-group">
-                  <label className="input-label">Cuenta de Destino</label>
-                  <select className="input-field" value={destinationAccountId} onChange={e => setDestinationAccountId(e.target.value)} required>
-                    <option value="">Selecciona cuenta</option>
-                    {accounts.filter(a => a.id !== accountId).map(acc => <option key={acc.id} value={acc.id}>{acc.name}</option>)}
+                  <label className="input-label">Monto</label>
+                  <input type="number" className="input-field" placeholder="0" value={amount} onChange={e => setAmount(e.target.value)} required />
+                </div>
+
+                <div className="input-group">
+                  <label className="input-label">Descripción</label>
+                  <input type="text" className="input-field" placeholder="Ej. Supermercado, Sueldo..." value={description} onChange={e => setDescription(e.target.value)} required />
+                </div>
+
+                <div className="input-group">
+                  <label className="input-label">Fecha</label>
+                  <input type="date" className="input-field" value={date} onChange={e => setDate(e.target.value)} required />
+                </div>
+
+                <div className="input-group">
+                  <label className="input-label">{type === 'income' ? 'Cuenta de Destino' : 'Cuenta de Origen'}</label>
+                  <select className="input-field" value={accountId} onChange={e => setAccountId(e.target.value)} required>
+                    {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.name}</option>)}
                   </select>
                 </div>
-              )}
 
-              {type === 'expense' && (
-                <div className="input-group">
-                  <label className="input-label">Presupuesto (Opcional)</label>
-                  <select className="input-field" value={budgetId} onChange={e => setBudgetId(e.target.value)}>
-                    <option value="">Ninguno</option>
-                    {budgets.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                  </select>
+                {type === 'transfer' && (
+                  <div className="input-group">
+                    <label className="input-label">Cuenta de Destino</label>
+                    <select className="input-field" value={destinationAccountId} onChange={e => setDestinationAccountId(e.target.value)} required>
+                      <option value="">Selecciona cuenta</option>
+                      {accounts.filter(a => a.id !== accountId).map(acc => <option key={acc.id} value={acc.id}>{acc.name}</option>)}
+                    </select>
+                  </div>
+                )}
+
+                {type === 'expense' && (
+                  <div className="input-group">
+                    <label className="input-label">Presupuesto (Opcional)</label>
+                    <select className="input-field" value={budgetId} onChange={e => setBudgetId(e.target.value)}>
+                      <option value="">Ninguno</option>
+                      {budgets.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                    </select>
+                  </div>
+                )}
+
+                <div className={styles.modalActions}>
+                  <button type="button" className="btn-secondary" onClick={() => setIsModalOpen(false)}>Cancelar</button>
+                  <button type="submit" className="btn-primary">Guardar</button>
                 </div>
-              )}
-
-
-
-              <div className={styles.modalActions}>
-                <button type="button" className="btn-secondary" onClick={() => setIsModalOpen(false)}>Cancelar</button>
-                <button type="submit" className="btn-primary">Guardar</button>
-              </div>
-            </form>
+              </form>
+            )}
           </div>
         </div>
       )}
