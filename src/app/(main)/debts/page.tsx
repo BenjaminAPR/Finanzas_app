@@ -19,6 +19,7 @@ export default function DebtsPage() {
   const [selectedInstallment, setSelectedInstallment] = useState<any>(null);
   const [payAccountId, setPayAccountId] = useState('');
   const [payAmount, setPayAmount] = useState('');
+  const [isHistorical, setIsHistorical] = useState(false);
 
   // Edit Installment Modal
   const [isEditInstModalOpen, setIsEditInstModalOpen] = useState(false);
@@ -98,7 +99,11 @@ export default function DebtsPage() {
 
   async function handlePayInstallment(e: React.FormEvent) {
     e.preventDefault();
-    if (!selectedInstallment || !payAccountId) return;
+    if (!selectedInstallment) return;
+    if (!isHistorical && !payAccountId) {
+      alert("Debes seleccionar una cuenta de origen o marcar la opción de pago histórico.");
+      return;
+    }
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -109,24 +114,29 @@ export default function DebtsPage() {
       const originalAmount = selectedInstallment.amount;
       const difference = actualAmount - originalAmount;
 
-      // 1. Crear transacción de egreso por el monto real pagado
-      const { data: tx, error: txError } = await supabase.from('transactions').insert({
-        type: 'expense',
-        amount: actualAmount,
-        description: `Pago Cuota ${selectedInstallment.installment_number} - ${debt?.name}`,
-        date: new Date().toISOString().split('T')[0],
-        account_id: payAccountId,
-        user_id: user.id
-      }).select().single();
+      let txId = null;
 
-      if (txError) throw txError;
+      if (!isHistorical) {
+        // 1. Crear transacción de egreso por el monto real pagado
+        const { data: tx, error: txError } = await supabase.from('transactions').insert({
+          type: 'expense',
+          amount: actualAmount,
+          description: `Pago Cuota ${selectedInstallment.installment_number} - ${debt?.name}`,
+          date: new Date().toISOString().split('T')[0],
+          account_id: payAccountId,
+          user_id: user.id
+        }).select().single();
+
+        if (txError) throw txError;
+        txId = tx.id;
+      }
 
       // 2. Marcar cuota como pagada y actualizar su monto real
       const { error: instError } = await supabase.from('installments')
         .update({ 
           status: 'paid', 
           paid_date: new Date().toISOString().split('T')[0], 
-          transaction_id: tx.id,
+          transaction_id: txId,
           amount: actualAmount 
         })
         .eq('id', selectedInstallment.id);
@@ -152,6 +162,7 @@ export default function DebtsPage() {
       setIsPayModalOpen(false);
       setSelectedInstallment(null);
       setPayAmount('');
+      setIsHistorical(false);
       loadData();
     } catch (err) {
       console.error(err);
@@ -319,6 +330,20 @@ export default function DebtsPage() {
               Monto original: {formatCurrency(selectedInstallment.amount)}. Si pagas más o menos de este monto, la diferencia se descontará de la última cuota pendiente de la deuda.
             </p>
             <form onSubmit={handlePayInstallment} className={styles.form}>
+              
+              <div className="input-group" style={{ flexDirection: 'row', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                <input 
+                  type="checkbox" 
+                  id="isHistorical"
+                  checked={isHistorical}
+                  onChange={e => setIsHistorical(e.target.checked)}
+                  style={{ width: '1.2rem', height: '1.2rem', cursor: 'pointer' }}
+                />
+                <label htmlFor="isHistorical" className="input-label" style={{ margin: 0, cursor: 'pointer' }}>
+                  Solo marcar como pagada (pago histórico, no restar saldo)
+                </label>
+              </div>
+
               <div className="input-group">
                 <label className="input-label">Monto real a pagar</label>
                 <input 
@@ -329,13 +354,17 @@ export default function DebtsPage() {
                   required 
                 />
               </div>
-              <div className="input-group">
-                <label className="input-label">¿Desde qué cuenta quieres pagar?</label>
-                <select className="input-field" value={payAccountId} onChange={e => setPayAccountId(e.target.value)} required>
-                  <option value="">Selecciona cuenta</option>
-                  {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.name}</option>)}
-                </select>
-              </div>
+              
+              {!isHistorical && (
+                <div className="input-group">
+                  <label className="input-label">¿Desde qué cuenta quieres pagar?</label>
+                  <select className="input-field" value={payAccountId} onChange={e => setPayAccountId(e.target.value)} required>
+                    <option value="">Selecciona cuenta</option>
+                    {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.name}</option>)}
+                  </select>
+                </div>
+              )}
+
               <div className={styles.modalActions}>
                 <button type="button" className="btn-secondary" onClick={() => setIsPayModalOpen(false)}>Cancelar</button>
                 <button type="submit" className="btn-primary">Confirmar Pago</button>
