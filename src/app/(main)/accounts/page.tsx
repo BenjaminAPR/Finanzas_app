@@ -204,12 +204,12 @@ export default function AccountsPage() {
       <div>
         <h2 className={styles.sectionTitle}>Mis Billeteras</h2>
         <div className={styles.accountsGrid}>
-          {accounts.length === 0 ? (
+          {accounts.filter(a => a.type !== 'Tarjeta de Crédito').length === 0 ? (
             <div className={styles.emptyState}>
               No tienes billeteras creadas. Haz clic en "Nueva Billetera" para comenzar.
             </div>
           ) : (
-            accounts.map(account => (
+            accounts.filter(a => a.type !== 'Tarjeta de Crédito').map(account => (
               <div key={account.id} className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', cursor: 'pointer' }} onClick={() => router.push(`/transactions?account=${account.id}`)}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
@@ -230,6 +230,32 @@ export default function AccountsPage() {
           )}
         </div>
       </div>
+
+      {accounts.filter(a => a.type === 'Tarjeta de Crédito').length > 0 && (
+        <div style={{ marginTop: '2rem' }}>
+          <h2 className={styles.sectionTitle}>Tarjetas de Crédito</h2>
+          <div className={styles.accountsGrid}>
+            {accounts.filter(a => a.type === 'Tarjeta de Crédito').map(account => (
+              <div key={account.id} className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', cursor: 'pointer', borderColor: 'var(--accent-color)' }} onClick={() => router.push(`/transactions?account=${account.id}`)}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <span style={{ fontSize: '1.5rem', background: 'var(--bg-primary)', padding: '0.5rem', borderRadius: '8px', border: '1px solid var(--accent-color)', color: 'var(--accent-color)' }}>
+                      💳
+                    </span>
+                    <div>
+                      <h3 style={{ fontSize: '1rem', fontWeight: 500, color: 'var(--text-primary)' }}>{account.name}</h3>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--accent-color)' }}>Deuda Actual</span>
+                    </div>
+                  </div>
+                </div>
+                <div style={{ fontSize: '1.5rem', fontWeight: 600, marginTop: '0.5rem', color: account.balance < 0 ? 'var(--danger)' : 'var(--text-primary)' }}>
+                  {formatCurrency(Math.abs(account.balance))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div>
         <h2 className={styles.sectionTitle}>Límites de Gasto</h2>
@@ -303,6 +329,7 @@ export default function AccountsPage() {
                   <option>Cuenta Corriente</option>
                   <option>Cuenta Vista / RUT</option>
                   <option>Cuenta de Ahorro</option>
+                  <option>Tarjeta de Crédito</option>
                   <option>Efectivo</option>
                 </select>
               </div>

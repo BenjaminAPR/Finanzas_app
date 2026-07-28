@@ -11,6 +11,7 @@ export default function DashboardPage() {
   const [profile, setProfile] = useState<any>(null);
   const [totalBalance, setTotalBalance] = useState(0);
   const [totalSavings, setTotalSavings] = useState(0);
+  const [totalDebt, setTotalDebt] = useState(0);
   const [monthIncome, setMonthIncome] = useState(0);
   const [monthExpense, setMonthExpense] = useState(0);
   const [accounts, setAccounts] = useState<any[]>([]);
@@ -80,11 +81,15 @@ export default function DashboardPage() {
           }
         });
 
-        // Calculate total savings
+        // Calculate total savings and total debt
         let tSavings = 0;
+        let tDebt = 0;
         processedAccounts.forEach(acc => {
           if (acc.type === 'Cuenta de Ahorro') {
             tSavings += acc.balance;
+          }
+          if (acc.type === 'Tarjeta de Crédito') {
+            tDebt += Math.abs(acc.balance);
           }
         });
 
@@ -101,6 +106,7 @@ export default function DashboardPage() {
         setAccounts(processedAccounts);
         setTotalBalance(globalBalance);
         setTotalSavings(tSavings);
+        setTotalDebt(tDebt);
         setMonthIncome(mIncome);
         setMonthExpense(mExpense);
       }
@@ -193,6 +199,12 @@ export default function DashboardPage() {
             {formatCurrency(totalSavings)}
           </div>
         </div>
+        <div className="card" style={{ borderColor: 'var(--danger)' }}>
+          <h3 className="h3" style={{ fontSize: '1rem', color: 'var(--danger)' }}>Deuda Tarjetas</h3>
+          <div className={styles.metricAmount} style={{ color: 'var(--danger)' }}>
+            {formatCurrency(totalDebt)}
+          </div>
+        </div>
         <div className="card">
           <h3 className="h3" style={{ fontSize: '1rem', color: 'var(--text-secondary)' }}>Ingresos del Ciclo</h3>
           <div className={styles.metricAmount} style={{ color: 'var(--success)' }}>
@@ -209,14 +221,16 @@ export default function DashboardPage() {
 
       {/* MIDDLE ROW: ACCOUNTS */}
       <div className="card">
-        <h3 className="h3" style={{ marginBottom: '1.5rem' }}>Mis Billeteras</h3>
-        <div className={styles.accountsGrid}>
-          {accounts.length === 0 ? (
-            <p className="text-secondary" style={{ fontSize: '0.9rem' }}>No has creado cuentas o billeteras.</p>
-          ) : accounts.map(acc => (
+        <h3 className="h3" style={{ marginBottom: '1.5rem' }}>Mis Cuentas</h3>
+        
+        <h4 className="text-secondary" style={{ marginBottom: '1rem', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Billeteras y Ahorros</h4>
+        <div className={styles.accountsGrid} style={{ marginBottom: '2rem' }}>
+          {accounts.filter(a => a.type !== 'Tarjeta de Crédito').length === 0 ? (
+            <p className="text-secondary" style={{ fontSize: '0.9rem' }}>No has creado billeteras.</p>
+          ) : accounts.filter(a => a.type !== 'Tarjeta de Crédito').map(acc => (
             <div key={acc.id} className={styles.accountCard} onClick={() => router.push(`/transactions?account=${acc.id}`)}>
               <div className={styles.accountInfo}>
-                <span className={styles.accountIcon}>🏦</span>
+                <span className={styles.accountIcon}>{acc.type === 'Cuenta de Ahorro' ? '🐷' : '🏦'}</span>
                 <div>
                   <div className={styles.accountName}>{acc.name}</div>
                   <div className={styles.accountType}>{acc.type}</div>
@@ -228,6 +242,28 @@ export default function DashboardPage() {
             </div>
           ))}
         </div>
+
+        {accounts.filter(a => a.type === 'Tarjeta de Crédito').length > 0 && (
+          <>
+            <h4 className="text-secondary" style={{ marginBottom: '1rem', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent-color)' }}>Tarjetas de Crédito</h4>
+            <div className={styles.accountsGrid}>
+              {accounts.filter(a => a.type === 'Tarjeta de Crédito').map(acc => (
+                <div key={acc.id} className={styles.accountCard} style={{ borderColor: 'var(--accent-color)' }} onClick={() => router.push(`/transactions?account=${acc.id}`)}>
+                  <div className={styles.accountInfo}>
+                    <span className={styles.accountIcon} style={{ color: 'var(--accent-color)' }}>💳</span>
+                    <div>
+                      <div className={styles.accountName}>{acc.name}</div>
+                      <div className={styles.accountType}>Deuda Actual</div>
+                    </div>
+                  </div>
+                  <div className={styles.accountBalance} style={{ color: acc.balance < 0 ? 'var(--danger)' : 'var(--text-primary)' }}>
+                    {formatCurrency(Math.abs(acc.balance))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       {/* BOTTOM ROW: LIMITS AND HISTORY */}
