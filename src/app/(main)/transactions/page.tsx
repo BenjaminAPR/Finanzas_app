@@ -1,14 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { formatDate, todayISO } from '@/lib/dates';
+import { summarize } from '@/lib/finance';
+import { useHouseholdData } from '@/lib/store';
 import styles from './transactions.module.css';
 
 export default function TransactionsPage() {
-  const [transactions, setTransactions] = useState<any[]>([]);
-  const [accounts, setAccounts] = useState<any[]>([]);
-  const [budgets, setBudgets] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data, loading, error, refresh: loadData } = useHouseholdData();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Filters
@@ -19,8 +19,8 @@ export default function TransactionsPage() {
   const [type, setType] = useState('expense');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [accountId, setAccountId] = useState('');
+  const [date, setDate] = useState(todayISO);
+  const [selectedAccountId, setAccountId] = useState('');
   const [destinationAccountId, setDestinationAccountId] = useState('');
   const [budgetId, setBudgetId] = useState('');
 
@@ -33,55 +33,29 @@ export default function TransactionsPage() {
       if (budgetParam) setFilterBudgetId(budgetParam);
     }
     
-    loadData();
   }, []);
 
-  async function loadData() {
-    try {
-      const [transRes, accRes, budgRes, profRes] = await Promise.all([
-        supabase.from('transactions').select('*').order('created_at', { ascending: false }),
-        supabase.from('accounts').select('*'),
-        supabase.from('budgets').select('*'),
-        supabase.from('profiles').select('*')
-      ]);
-
-      if (transRes.error) {
-        console.error('Error fetching transactions:', transRes.error);
-      }
-
-      if (transRes.data) {
-        const validTx = transRes.data.filter(t => t.description !== '🔄 Cierre de Mes' && t.description !== '🔄 Rollover');
-        const enrichedTransactions = validTx.map(t => {
-          const account = accRes.data?.find(a => a.id === t.account_id);
-          const destAccount = accRes.data?.find(a => a.id === t.destination_account_id);
-          const budget = budgRes.data?.find(b => b.id === t.budget_id);
-          const profile = profRes.data?.find(p => p.id === t.user_id);
-          
-          return {
-            ...t,
-            accounts: account ? { name: account.name } : null,
-            dest_account: destAccount ? { name: destAccount.name } : null,
-            budgets: budget ? { name: budget.name } : null,
-            profiles: profile ? { full_name: profile.full_name } : null
-          };
-        });
-        setTransactions(enrichedTransactions);
-      }
-      
-      if (accRes.data) {
-        setAccounts(accRes.data);
-        if (accRes.data.length > 0) setAccountId(accRes.data[0].id);
-      }
-      if (budgRes.data) setBudgets(budgRes.data);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }
+  const accounts = useMemo(() => data?.accounts ?? [], [data]);
+  const budgets = useMemo(() => data?.budgets ?? [], [data]);
+  const accountId = selectedAccountId || accounts[0]?.id || '';
+  const transactions = useMemo(() => {
+    if (!data) return [];
+    const accountName = new Map(data.accounts.map(a => [a.id, a.name]));
+    const budgetName = new Map(data.budgets.map(b => [b.id, b.name]));
+    return summarize(data.accounts, data.budgets, data.transactions).visible.map(t => ({
+      ...t,
+      originName: t.account_id ? accountName.get(t.account_id) : undefined,
+      destinationName: t.destination_account_id ? accountName.get(t.destination_account_id) : undefined,
+      budgetName: t.budget_id ? budgetName.get(t.budget_id) : undefined,
+    }));
+  }, [data]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (type === 'transfer' && destinationAccountId === accountId) {
+      alert('La cuenta de origen y destino deben ser distintas');
+      return;
+    }
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -131,6 +105,7 @@ export default function TransactionsPage() {
   const formatCurrency = (val: number) => `$${val.toLocaleString('es-CL')}`;
 
   if (loading) return <div className={styles.loading}>Cargando movimientos...</div>;
+  if (error && !data) return <div className={styles.loading}>{error}</div>;
 
   return (
     <div className={styles.page}>
@@ -177,9 +152,9 @@ export default function TransactionsPage() {
                 <div className={styles.feedDetails}>
                   <span className={styles.feedTitle}>{t.description}</span>
                   <div className={styles.feedMeta}>
-                    <span>{new Date(t.date).toLocaleDateString('es-CL')}</span>
-                    {t.budgets?.name && <span>• {t.budgets.name}</span>}
-                    <span>• {t.type === 'transfer' ? `${t.accounts?.name} ➔ ${t.dest_account?.name}` : t.accounts?.name}</span>
+                    <span>{formatDate(t.date || t.created_at)}</span>
+                    {t.budgetName && <span>• {t.budgetName}</span>}
+                    <span>• {t.type === 'transfer' ? `${t.originName} ➔ ${t.destinationName}` : t.originName}</span>
                   </div>
                 </div>
               </div>
@@ -226,7 +201,7 @@ export default function TransactionsPage() {
 
                 <div className="input-group">
                   <label className="input-label">Monto</label>
-                  <input type="number" className="input-field" placeholder="0" value={amount} onChange={e => setAmount(e.target.value)} required />
+                  <input type="number" min="1" step="1" inputMode="numeric" className="input-field" placeholder="0" value={amount} onChange={e => setAmount(e.target.value)} required />
                 </div>
 
                 <div className="input-group">

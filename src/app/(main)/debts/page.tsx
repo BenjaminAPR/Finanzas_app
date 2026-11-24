@@ -2,6 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { addMonths, formatDate, todayISO } from '@/lib/dates';
+import { splitInstallments } from '@/lib/finance';
+import { refreshData } from '@/lib/store';
 import styles from './debts.module.css';
 
 export default function DebtsPage() {
@@ -70,18 +73,15 @@ export default function DebtsPage() {
       
       if (debtError) throw debtError;
 
-      const installmentAmount = debtAmount / count;
-      const installmentsPayload = Array.from({ length: count }).map((_, i) => {
-        const date = new Date();
-        date.setMonth(date.getMonth() + i);
-        return {
-          debt_id: newDebt.id,
-          installment_number: i + 1,
-          amount: installmentAmount,
-          due_date: date.toISOString().split('T')[0],
-          status: 'pending'
-        };
-      });
+      const amounts = splitInstallments(debtAmount, count);
+      const firstDue = todayISO();
+      const installmentsPayload = amounts.map((amount, i) => ({
+        debt_id: newDebt.id,
+        installment_number: i + 1,
+        amount,
+        due_date: addMonths(firstDue, i),
+        status: 'pending'
+      }));
 
       const { error: instError } = await supabase.from('installments').insert(installmentsPayload);
       if (instError) throw instError;
@@ -122,7 +122,7 @@ export default function DebtsPage() {
           type: 'expense',
           amount: actualAmount,
           description: `Pago Cuota ${selectedInstallment.installment_number} - ${debt?.name}`,
-          date: new Date().toISOString().split('T')[0],
+          date: todayISO(),
           account_id: payAccountId,
           user_id: user.id
         }).select().single();
@@ -135,7 +135,7 @@ export default function DebtsPage() {
       const { error: instError } = await supabase.from('installments')
         .update({ 
           status: 'paid', 
-          paid_date: new Date().toISOString().split('T')[0], 
+          paid_date: todayISO(), 
           transaction_id: txId,
           amount: actualAmount 
         })
@@ -164,6 +164,7 @@ export default function DebtsPage() {
       setPayAmount('');
       setIsHistorical(false);
       loadData();
+      void refreshData();
     } catch (err) {
       console.error(err);
       alert('Error al pagar la cuota');
@@ -263,7 +264,7 @@ export default function DebtsPage() {
                       <span>Cuota {inst.installment_number}</span>
                       <div className={styles.instDetails}>
                         <span>{formatCurrency(inst.amount)}</span>
-                        <span className={styles.instDate}>{new Date(inst.due_date).toLocaleDateString('es-CL')}</span>
+                        <span className={styles.instDate}>{formatDate(inst.due_date)}</span>
                         {inst.status === 'pending' ? (
                           <div style={{ display: 'flex', gap: '0.5rem' }}>
                             <button 

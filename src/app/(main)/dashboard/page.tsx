@@ -1,121 +1,25 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { formatDate, todayISO } from '@/lib/dates';
+import { CLOSE_MARKER, summarize } from '@/lib/finance';
+import { useHouseholdData } from '@/lib/store';
 import styles from './dashboard.module.css';
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState<any>(null);
-  const [totalBalance, setTotalBalance] = useState(0);
-  const [totalSavings, setTotalSavings] = useState(0);
-  const [totalDebt, setTotalDebt] = useState(0);
-  const [monthIncome, setMonthIncome] = useState(0);
-  const [monthExpense, setMonthExpense] = useState(0);
-  const [accounts, setAccounts] = useState<any[]>([]);
-  const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
-  const [budgetGoals, setBudgetGoals] = useState<any[]>([]);
-  const [lastCierreData, setLastCierreData] = useState<any>(null);
+  const { data, loading, error, refresh: loadData } = useHouseholdData();
   const [showReviewModal, setShowReviewModal] = useState(false);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  async function loadData() {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-        if (profileData) setProfile(profileData);
-
-        const { data: accountsData } = await supabase.from('accounts').select('*');
-        const { data: transactionsData } = await supabase.from('transactions').select('*');
-        const { data: budgetsData } = await supabase.from('budgets').select('*');
-
-        const sortedTx = transactionsData 
-          ? [...transactionsData].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()) 
-          : [];
-
-        // Find the last "Cierre de Mes" marker
-        const lastReset = sortedTx.find(tx => tx.description === '🔄 Cierre de Mes');
-        const cycleStartDate = lastReset ? new Date(lastReset.created_at) : new Date(0);
-        setLastCierreData(lastReset || null);
-
-        const validTx = sortedTx.filter(tx => tx.description !== '🔄 Cierre de Mes' && tx.description !== '🔄 Rollover');
-
-        let globalBalance = 0;
-        let processedAccounts = accountsData?.map(acc => ({...acc, balance: 0})) || [];
-        
-        let mIncome = 0;
-        let mExpense = 0;
-        let budgetExpenses: Record<string, number> = {};
-
-        validTx.forEach(tx => {
-          const txDate = new Date(tx.created_at);
-          const isCurrentCycle = txDate > cycleStartDate;
-
-          if (tx.type === 'income') globalBalance += tx.amount;
-          if (tx.type === 'expense') globalBalance -= tx.amount;
-
-          const originAcc = processedAccounts.find(a => a.id === tx.account_id);
-          const destAcc = processedAccounts.find(a => a.id === tx.destination_account_id);
-
-          if (tx.type === 'income' && originAcc) originAcc.balance += tx.amount; 
-          if (tx.type === 'expense' && originAcc) originAcc.balance -= tx.amount;
-          if (tx.type === 'transfer') {
-            if (originAcc) originAcc.balance -= tx.amount;
-            if (destAcc) destAcc.balance += tx.amount;
-          }
-
-          if (isCurrentCycle) {
-            if (tx.type === 'income' && tx.description !== '[AHORRO] Saldo Inicial') mIncome += tx.amount;
-            if (tx.type === 'expense') {
-              mExpense += tx.amount;
-              if (tx.budget_id) {
-                budgetExpenses[tx.budget_id] = (budgetExpenses[tx.budget_id] || 0) + tx.amount;
-              }
-            }
-          }
-        });
-
-        // Calculate total savings and total debt
-        let tSavings = 0;
-        let tDebt = 0;
-        processedAccounts.forEach(acc => {
-          if (acc.type === 'Cuenta de Ahorro') {
-            tSavings += acc.balance;
-          }
-          if (acc.type === 'Tarjeta de Crédito') {
-            tDebt += Math.abs(acc.balance);
-          }
-        });
-
-        const bGoals = budgetsData?.map(b => {
-          return {
-            ...b,
-            amount: b.amount,
-            spent: budgetExpenses[b.id] || 0
-          };
-        }) || [];
-
-        setBudgetGoals(bGoals);
-        setRecentTransactions(validTx.slice(0, 5));
-        setAccounts(processedAccounts);
-        setTotalBalance(globalBalance);
-        setTotalSavings(tSavings);
-        setTotalDebt(tDebt);
-        setMonthIncome(mIncome);
-        setMonthExpense(mExpense);
-      }
-    } catch (error) {
-      console.error('Error loading data', error);
-    } finally {
-      setLoading(false);
-    }
-  }
+  const summary = useMemo(
+    () => summarize(data?.accounts ?? [], data?.budgets ?? [], data?.transactions ?? []),
+    [data]
+  );
+  const profile = data?.profiles.find(p => p.id === data.userId);
+  const { accounts, lastClose: lastCierreData, liquidity, savings: totalSavings, cardDebt: totalDebt, cycleIncome: monthIncome, cycleExpense: monthExpense, budgets: budgetGoals } = summary;
+  const recentTransactions = summary.visible.slice(0, 5);
 
   async function handleCloseMonth() {
     if (!window.confirm('¿Estás seguro de que quieres reiniciar el ciclo actual? Los medidores de tus límites y gastos del ciclo volverán a 0, pero tus saldos de dinero quedarán intactos.')) return;
@@ -126,8 +30,8 @@ export default function DashboardPage() {
       const { error } = await supabase.from('transactions').insert({
         type: 'expense',
         amount: 0,
-        description: '🔄 Cierre de Mes',
-        date: new Date().toISOString().split('T')[0],
+        description: CLOSE_MARKER,
+        date: todayISO(),
         user_id: user.id
       });
       if (error) throw error;
@@ -157,6 +61,7 @@ export default function DashboardPage() {
   const formatCurrency = (val: number) => `$${val.toLocaleString('es-CL')}`;
 
   if (loading) return <div className={styles.loading}>Cargando resumen...</div>;
+  if (error && !data) return <div className={styles.loading}>{error}</div>;
 
   return (
     <div className={styles.dashboard}>
@@ -190,7 +95,7 @@ export default function DashboardPage() {
         <div className="card">
           <h3 className="h3" style={{ fontSize: '1rem', color: 'var(--text-secondary)' }}>Liquidez (Sin Ahorros)</h3>
           <div className={styles.metricAmount} style={{ color: 'var(--text-primary)' }}>
-            {formatCurrency(totalBalance - totalSavings)}
+            {formatCurrency(liquidity)}
           </div>
         </div>
         <div className="card" style={{ borderColor: 'var(--accent-color)' }}>
@@ -307,7 +212,7 @@ export default function DashboardPage() {
                     <span className={styles.txIcon}>{tx.type === 'income' ? '↓' : tx.type === 'expense' ? '↑' : '⇄'}</span>
                     <div className={styles.txDetails}>
                       <span className={styles.txTitle}>{tx.description}</span>
-                      <span className={styles.txDate}>{new Date(tx.date || tx.created_at).toLocaleDateString('es-CL')}</span>
+                      <span className={styles.txDate}>{formatDate(tx.date || tx.created_at)}</span>
                     </div>
                   </div>
                   <span className={styles.txAmount} style={{ color: tx.type === 'income' ? 'var(--success)' : tx.type === 'expense' ? 'var(--danger)' : 'var(--text-primary)' }}>

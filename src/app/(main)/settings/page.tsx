@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { clearData } from '@/lib/store';
 
 export default function SettingsPage() {
   const [exporting, setExporting] = useState(false);
@@ -71,6 +72,20 @@ export default function SettingsPage() {
       const { data: accounts } = await supabase.from('accounts').select('id').eq('user_id', user.id);
       const accountIds = accounts?.map(a => a.id) || [];
 
+      // Las cuentas pueden tener movimientos de la otra persona del hogar: nunca borrarlos desde aquí.
+      if (accountIds.length > 0) {
+        const { count, error: sharedError } = await supabase
+          .from('transactions')
+          .select('id', { count: 'exact', head: true })
+          .in('account_id', accountIds)
+          .neq('user_id', user.id);
+        if (sharedError) throw sharedError;
+        if (count) {
+          alert(`No se borró nada: tus cuentas tienen ${count} movimientos registrados por otra persona del hogar.`);
+          return;
+        }
+      }
+
       if (accountIds.length > 0) {
         await supabase.from('transactions').delete().in('account_id', accountIds);
         await supabase.from('budgets').delete().in('account_id', accountIds);
@@ -84,6 +99,7 @@ export default function SettingsPage() {
       await supabase.from('budgets').delete().eq('user_id', user.id);
       await supabase.from('transactions').delete().eq('user_id', user.id);
 
+      clearData();
       alert('Tus datos han sido borrados por completo. Has empezado desde 0.');
       window.location.href = '/dashboard';
     } catch (error: any) {

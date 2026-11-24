@@ -1,15 +1,19 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { summarize } from '@/lib/finance';
+import { useHouseholdData } from '@/lib/store';
 import styles from './accounts.module.css';
 
 export default function AccountsPage() {
   const router = useRouter();
-  const [accounts, setAccounts] = useState<any[]>([]);
-  const [globalBudgets, setGlobalBudgets] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data, loading, error, refresh: loadAccounts } = useHouseholdData();
+  const { accounts, budgets: globalBudgets } = useMemo(
+    () => summarize(data?.accounts ?? [], data?.budgets ?? [], data?.transactions ?? []),
+    [data]
+  );
   
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
   const [newAccountName, setNewAccountName] = useState('');
@@ -20,72 +24,6 @@ export default function AccountsPage() {
   const [newBudgetName, setNewBudgetName] = useState('');
   const [newBudgetAmount, setNewBudgetAmount] = useState('');
 
-  useEffect(() => {
-    loadAccounts();
-  }, []);
-
-  async function loadAccounts() {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data: accData, error } = await supabase
-        .from('accounts')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      
-      const { data: budgetsData } = await supabase
-        .from('budgets')
-        .select('*, accounts!inner(user_id)')
-        .eq('accounts.user_id', user.id);
-
-      const { data: txData } = await supabase.from('transactions').select('*');
-
-      const sortedTx = txData ? [...txData].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()) : [];
-      const lastReset = sortedTx.find(tx => tx.description === '🔄 Cierre de Mes');
-      const cycleStartDate = lastReset ? new Date(lastReset.created_at) : new Date(0);
-
-      // Only process active transactions, ignore legacy rollover/close markers
-      const validTx = sortedTx.filter(tx => tx.description !== '🔄 Cierre de Mes' && tx.description !== '🔄 Rollover');
-
-      let processedAccounts = accData?.map(acc => {
-        let balance = 0;
-        validTx.forEach(tx => {
-          if (tx.type === 'income' && tx.account_id === acc.id) balance += tx.amount;
-          if (tx.type === 'expense' && tx.account_id === acc.id) balance -= tx.amount;
-          if (tx.type === 'transfer') {
-            if (tx.account_id === acc.id) balance -= tx.amount;
-            if (tx.destination_account_id === acc.id) balance += tx.amount;
-          }
-        });
-        return { ...acc, balance };
-      }) || [];
-      
-      let processedBudgets = budgetsData?.map(b => {
-        let spent = 0;
-        validTx.forEach(tx => {
-          const txDate = new Date(tx.created_at);
-          const isCurrentCycle = txDate > cycleStartDate;
-          
-          if (isCurrentCycle && tx.type === 'expense' && tx.budget_id === b.id) {
-            spent += tx.amount;
-          }
-        });
-        return { ...b, amount: b.amount, spent };
-      }) || [];
-      
-      processedBudgets.sort((a: any, b: any) => a.name.localeCompare(b.name));
-
-      setAccounts(processedAccounts);
-      setGlobalBudgets(processedBudgets);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }
 
   async function handleCreateAccount(e: React.FormEvent) {
     e.preventDefault();
@@ -183,6 +121,7 @@ export default function AccountsPage() {
   const formatCurrency = (val: number) => `$${val.toLocaleString('es-CL')}`;
 
   if (loading) return <div className={styles.loading}>Cargando cuentas...</div>;
+  if (error && !data) return <div className={styles.loading}>{error}</div>;
 
   return (
     <div className={styles.page}>

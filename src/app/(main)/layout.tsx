@@ -1,17 +1,26 @@
 'use client';
 
-import { ReactNode } from 'react';
+import { ReactNode, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { clearData } from '@/lib/store';
 import styles from './layout.module.css';
 
 export default function MainLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
 
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') clearData();
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
+    clearData();
     router.push('/login');
   };
 
