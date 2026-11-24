@@ -1,382 +1,181 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useMemo, useState, type FormEvent } from 'react';
+import Link from 'next/link';
+import { Icon, Sheet, WithData } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
-import styles from './accounts.module.css';
+import { todayISO } from '@/lib/dates';
+import { clp, shortDate } from '@/lib/format';
+import type { AccountWithBalance, AssetKind, Household } from '@/lib/finance';
+import { debtOverview } from '@/lib/plan';
+import { refreshData } from '@/lib/store';
 
-export default function AccountsPage() {
-  const router = useRouter();
-  const [accounts, setAccounts] = useState<any[]>([]);
-  const [globalBudgets, setGlobalBudgets] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  
-  const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
-  const [newAccountName, setNewAccountName] = useState('');
-  const [newAccountType, setNewAccountType] = useState('Cuenta Corriente');
+const KIND_TYPE: Record<AssetKind, string> = {
+  cash: 'Cuenta Corriente',
+  deposit: 'Cuenta de Ahorro',
+  investment: 'Cuenta de Ahorro',
+  card: 'Tarjeta de Crédito',
+};
+const GROUPS: { kind: AssetKind; title: string }[] = [
+  { kind: 'cash', title: 'Disponible' },
+  { kind: 'deposit', title: 'Depósitos a plazo' },
+  { kind: 'investment', title: 'Inversiones' },
+  { kind: 'card', title: 'Tarjetas' },
+];
 
-  const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
-  const [editingBudgetId, setEditingBudgetId] = useState<string | null>(null);
-  const [newBudgetName, setNewBudgetName] = useState('');
-  const [newBudgetAmount, setNewBudgetAmount] = useState('');
+function BalanceSheet({ account, onClose }: { account: AccountWithBalance; onClose: () => void }) {
+  const isCard = account.asset_kind === 'card';
+  const [value, setValue] = useState(String(Math.abs(Math.round(account.balance))));
+  const [maturity, setMaturity] = useState(account.maturity_date ?? '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const amount = Number(value.replace(/\D/g, ''));
 
-  useEffect(() => {
-    loadAccounts();
-  }, []);
-
-  async function loadAccounts() {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data: accData, error } = await supabase
-        .from('accounts')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      
-      const { data: budgetsData } = await supabase
-        .from('budgets')
-        .select('*, accounts!inner(user_id)')
-        .eq('accounts.user_id', user.id);
-
-      const { data: txData } = await supabase.from('transactions').select('*');
-
-      const sortedTx = txData ? [...txData].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()) : [];
-      const lastReset = sortedTx.find(tx => tx.description === '🔄 Cierre de Mes');
-      const cycleStartDate = lastReset ? new Date(lastReset.created_at) : new Date(0);
-
-      // Only process active transactions, ignore legacy rollover/close markers
-      const validTx = sortedTx.filter(tx => tx.description !== '🔄 Cierre de Mes' && tx.description !== '🔄 Rollover');
-
-      let processedAccounts = accData?.map(acc => {
-        let balance = 0;
-        validTx.forEach(tx => {
-          if (tx.type === 'income' && tx.account_id === acc.id) balance += tx.amount;
-          if (tx.type === 'expense' && tx.account_id === acc.id) balance -= tx.amount;
-          if (tx.type === 'transfer') {
-            if (tx.account_id === acc.id) balance -= tx.amount;
-            if (tx.destination_account_id === acc.id) balance += tx.amount;
-          }
-        });
-        return { ...acc, balance };
-      }) || [];
-      
-      let processedBudgets = budgetsData?.map(b => {
-        let spent = 0;
-        validTx.forEach(tx => {
-          const txDate = new Date(tx.created_at);
-          const isCurrentCycle = txDate > cycleStartDate;
-          
-          if (isCurrentCycle && tx.type === 'expense' && tx.budget_id === b.id) {
-            spent += tx.amount;
-          }
-        });
-        return { ...b, amount: b.amount, spent };
-      }) || [];
-      
-      processedBudgets.sort((a: any, b: any) => a.name.localeCompare(b.name));
-
-      setAccounts(processedAccounts);
-      setGlobalBudgets(processedBudgets);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleCreateAccount(e: React.FormEvent) {
+  async function submit(e: FormEvent) {
     e.preventDefault();
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { error } = await supabase.from('accounts').insert({
-        name: newAccountName,
-        type: newAccountType,
-        user_id: user.id
-      });
-      
-      if (error) throw error;
-      setIsAccountModalOpen(false);
-      setNewAccountName('');
-      loadAccounts();
-    } catch (err) {
-      console.error(err);
-      alert('Error creando cuenta');
-    }
+    setSaving(true);
+    const { error: updateError } = await supabase.from('accounts').update({
+      anchor_balance: isCard ? -amount : amount,
+      anchor_date: todayISO(),
+      anchor_set_at: new Date().toISOString(),
+      maturity_date: account.asset_kind === 'deposit' ? maturity || null : account.maturity_date ?? null,
+    }).eq('id', account.id);
+    setSaving(false);
+    if (updateError) { setError('No se pudo actualizar.'); return; }
+    void refreshData();
+    onClose();
   }
-
-  async function handleSaveBudget(e: React.FormEvent) {
-    e.preventDefault();
-    if (!newBudgetName.trim()) return;
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      
-      const amount = parseFloat(newBudgetAmount) || 0;
-
-      if (editingBudgetId) {
-        const { error } = await supabase.from('budgets').update({
-          name: newBudgetName,
-          amount: amount
-        }).eq('id', editingBudgetId);
-        if (error) throw error;
-      } else {
-        const accIdToUse = accounts.length > 0 ? accounts[0].id : null;
-        const { error } = await supabase.from('budgets').insert({
-          account_id: accIdToUse,
-          name: newBudgetName,
-          amount: amount,
-          user_id: user.id
-        });
-        if (error) throw error;
-      }
-      
-      closeBudgetModal();
-      loadAccounts();
-    } catch (err: any) {
-      console.error(err);
-      setErrorMsg('Error guardando presupuesto: ' + (err.message || JSON.stringify(err)));
-    }
-  }
-
-  async function handleDeleteBudget(budgetId: string) {
-    if (!window.confirm('¿Estás seguro de que quieres eliminar este presupuesto? Los movimientos asociados perderán su categoría.')) return;
-    try {
-      const { error } = await supabase.from('budgets').delete().eq('id', budgetId);
-      if (error) throw error;
-      loadAccounts();
-    } catch (err) {
-      console.error(err);
-      alert('Error al eliminar presupuesto');
-    }
-  }
-
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  function openNewBudgetModal() {
-    setErrorMsg(null);
-    setEditingBudgetId(null);
-    setNewBudgetName('');
-    setNewBudgetAmount('');
-    setIsBudgetModalOpen(true);
-  }
-
-  function openEditBudgetModal(budget: any) {
-    setErrorMsg(null);
-    setEditingBudgetId(budget.id);
-    setNewBudgetName(budget.name);
-    setNewBudgetAmount(budget.amount === 0 ? '' : budget.amount.toString());
-    setIsBudgetModalOpen(true);
-  }
-
-  function closeBudgetModal() {
-    setIsBudgetModalOpen(false);
-    setEditingBudgetId(null);
-    setNewBudgetName('');
-    setNewBudgetAmount('');
-  }
-
-  const formatCurrency = (val: number) => `$${val.toLocaleString('es-CL')}`;
-
-  if (loading) return <div className={styles.loading}>Cargando cuentas...</div>;
 
   return (
-    <div className={styles.page}>
-      <header className={styles.header}>
-        <div>
-          <h1 className="h2">Billeteras y Límites</h1>
-          <p className="text-secondary">Administra tus billeteras y asigna límites de gastos para tu ciclo actual.</p>
-        </div>
-        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-          <button className="btn-secondary" onClick={() => openNewBudgetModal()}>
-            Nuevo Límite
-          </button>
-          <button className="btn-primary" onClick={() => setIsAccountModalOpen(true)}>
-            Nueva Billetera
-          </button>
-        </div>
-      </header>
+    <Sheet title={`Actualizar ${account.name}`} onClose={onClose}>
+      <form className="form-stack" onSubmit={e => void submit(e)}>
+        <p className="text-muted">{isCard ? 'Escribe cuánto debes hoy en esta tarjeta.' : 'Escribe el saldo real de hoy.'} Desde ahora la app parte de este número.</p>
+        <input className="amount-input" inputMode="numeric" aria-label="Saldo" value={amount ? `$${amount.toLocaleString('es-CL')}` : '$0'} onChange={e => setValue(e.target.value)} />
+        {account.asset_kind === 'deposit' && (
+          <div className="input-group">
+            <label className="input-label" htmlFor="maturity">Fecha de vencimiento</label>
+            <input id="maturity" type="date" className="input-field" value={maturity} onChange={e => setMaturity(e.target.value)} />
+          </div>
+        )}
+        {error && <div className="notice danger" role="alert">{error}</div>}
+        <button className="btn-primary btn-block" disabled={saving}>{saving ? 'Guardando…' : 'Guardar saldo'}</button>
+      </form>
+    </Sheet>
+  );
+}
 
-      <div>
-        <h2 className={styles.sectionTitle}>Mis Billeteras</h2>
-        <div className={styles.accountsGrid}>
-          {accounts.filter(a => a.type !== 'Tarjeta de Crédito').length === 0 ? (
-            <div className={styles.emptyState}>
-              No tienes billeteras creadas. Haz clic en "Nueva Billetera" para comenzar.
-            </div>
-          ) : (
-            accounts.filter(a => a.type !== 'Tarjeta de Crédito').map(account => (
-              <div key={account.id} className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', cursor: 'pointer' }} onClick={() => router.push(`/transactions?account=${account.id}`)}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <span style={{ fontSize: '1.5rem', background: 'var(--bg-primary)', padding: '0.5rem', borderRadius: '8px', border: '1px solid var(--border-light)' }}>
-                      {account.type === 'Cuenta de Ahorro' ? '🐷' : '🏦'}
-                    </span>
-                    <div>
-                      <h3 style={{ fontSize: '1rem', fontWeight: 500, color: 'var(--text-primary)' }}>{account.name}</h3>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{account.type}</span>
-                    </div>
-                  </div>
-                </div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 600, marginTop: '0.5rem', color: 'var(--text-primary)' }}>
-                  {formatCurrency(account.balance)}
-                </div>
-              </div>
-            ))
-          )}
+function NewAccountSheet({ data, onClose }: { data: Household; onClose: () => void }) {
+  const [name, setName] = useState('');
+  const [kind, setKind] = useState<AssetKind>('cash');
+  const [institution, setInstitution] = useState('');
+  const [owner, setOwner] = useState('');
+  const [balance, setBalance] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    const amount = Number(balance.replace(/\D/g, ''));
+    const { error: insertError } = await supabase.from('accounts').insert({
+      name: name.trim(),
+      type: KIND_TYPE[kind],
+      asset_kind: kind,
+      institution: institution.trim() || null,
+      owner_label: owner.trim() || null,
+      user_id: data.userId,
+      anchor_balance: kind === 'card' ? -amount : amount,
+      anchor_date: todayISO(),
+      anchor_set_at: new Date().toISOString(),
+    });
+    if (insertError) { setError('No se pudo crear la cuenta.'); return; }
+    void refreshData();
+    onClose();
+  }
+
+  return (
+    <Sheet title="Nueva cuenta o inversión" onClose={onClose}>
+      <form className="form-stack" onSubmit={e => void submit(e)}>
+        <div className="input-group"><label className="input-label" htmlFor="a-name">Nombre</label><input id="a-name" className="input-field" value={name} onChange={e => setName(e.target.value)} required /></div>
+        <div className="input-group">
+          <label className="input-label" htmlFor="a-kind">Tipo</label>
+          <select id="a-kind" className="input-field" value={kind} onChange={e => setKind(e.target.value as AssetKind)}>
+            <option value="cash">Cuenta o efectivo</option>
+            <option value="deposit">Depósito a plazo</option>
+            <option value="investment">Inversión</option>
+            <option value="card">Tarjeta de crédito</option>
+          </select>
         </div>
+        <div className="form-row">
+          <div className="input-group"><label className="input-label" htmlFor="a-inst">Institución</label><input id="a-inst" className="input-field" value={institution} onChange={e => setInstitution(e.target.value)} /></div>
+          <div className="input-group"><label className="input-label" htmlFor="a-owner">De quién</label><input id="a-owner" className="input-field" value={owner} onChange={e => setOwner(e.target.value)} /></div>
+        </div>
+        <div className="input-group"><label className="input-label" htmlFor="a-balance">{kind === 'card' ? 'Deuda actual' : 'Saldo actual'}</label><input id="a-balance" className="input-field" inputMode="numeric" value={balance} onChange={e => setBalance(e.target.value)} /></div>
+        {error && <div className="notice danger" role="alert">{error}</div>}
+        <button className="btn-primary btn-block">Crear</button>
+      </form>
+    </Sheet>
+  );
+}
+
+function Wealth({ data }: { data: Household }) {
+  const today = todayISO();
+  const overview = useMemo(() => debtOverview(data, today), [data, today]);
+  const { wealth } = overview;
+  const [editing, setEditing] = useState<AccountWithBalance | null>(null);
+  const [adding, setAdding] = useState(false);
+
+  return (
+    <div className="page">
+      <div className="page-head">
+        <h1 className="h1">Patrimonio</h1>
+        <button className="btn-primary btn-small" onClick={() => setAdding(true)}><Icon name="plus" size={16} />Agregar</button>
       </div>
 
-      {accounts.filter(a => a.type === 'Tarjeta de Crédito').length > 0 && (
-        <div style={{ marginTop: '2rem' }}>
-          <h2 className={styles.sectionTitle}>Tarjetas de Crédito</h2>
-          <div className={styles.accountsGrid}>
-            {accounts.filter(a => a.type === 'Tarjeta de Crédito').map(account => (
-              <div key={account.id} className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', cursor: 'pointer', borderColor: 'var(--accent-color)' }} onClick={() => router.push(`/transactions?account=${account.id}`)}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <span style={{ fontSize: '1.5rem', background: 'var(--bg-primary)', padding: '0.5rem', borderRadius: '8px', border: '1px solid var(--accent-color)', color: 'var(--accent-color)' }}>
-                      💳
-                    </span>
-                    <div>
-                      <h3 style={{ fontSize: '1rem', fontWeight: 500, color: 'var(--text-primary)' }}>{account.name}</h3>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--accent-color)' }}>Deuda Actual</span>
-                    </div>
-                  </div>
-                </div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 600, marginTop: '0.5rem', color: account.balance < 0 ? 'var(--danger)' : 'var(--text-primary)' }}>
-                  {formatCurrency(Math.abs(account.balance))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <section className="card hero">
+        <div className="hero-label">Patrimonio neto del hogar</div>
+        <div className="hero-value">{clp(overview.netWorth)}</div>
+        <div className="hero-sub">Tienen {clp(wealth.assets)} y deben {clp(overview.total)}</div>
+      </section>
 
-      <div>
-        <h2 className={styles.sectionTitle}>Límites de Gasto</h2>
-        <div className={styles.budgetsGrid}>
-          {globalBudgets.length === 0 ? (
-            <div className={styles.emptyState}>
-              No has creado límites. Úsalos para controlar tus gastos en tu ciclo personal.
-            </div>
-          ) : (
-            globalBudgets.map(b => {
-              const isVariable = b.amount === 0;
-              const progress = isVariable ? 0 : Math.min((b.spent / b.amount) * 100, 100);
-              const isOverBudget = !isVariable && b.spent > b.amount;
-              
-              return (
-                <div key={b.id} className={styles.budgetCard}>
-                  <div className={styles.budgetHeader}>
-                    <div>
-                      <h4 style={{ fontWeight: 600, fontSize: '1.1rem', color: 'var(--text-primary)' }}>{b.name}</h4>
-                      <span className={styles.budgetAccount} style={{ background: 'transparent', border: '1px solid var(--border-light)', marginTop: '0.5rem' }}>
-                        Límite del Ciclo
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <button onClick={() => router.push(`/transactions?budget=${b.id}`)} style={{padding: '0.4rem', fontSize: '1rem', borderRadius: '0.5rem', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-light)', cursor: 'pointer', color: 'var(--text-primary)'}} title="Ver movimientos">🔍</button>
-                      <button onClick={() => openEditBudgetModal(b)} style={{padding: '0.4rem', fontSize: '1rem', borderRadius: '0.5rem', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--accent-color)'}} title="Editar presupuesto">✎</button>
-                      <button onClick={() => handleDeleteBudget(b.id)} style={{padding: '0.4rem', fontSize: '1rem', borderRadius: '0.5rem', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--danger)'}} title="Eliminar presupuesto">🗑️</button>
-                    </div>
-                  </div>
-                  
-                  <div style={{ marginTop: '0.75rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.75rem' }}>
-                      <span style={{ color: 'var(--text-secondary)' }}>
-                        {isVariable ? `Gastado en ciclo: ${formatCurrency(b.spent)}` : `${formatCurrency(b.spent)} / ${formatCurrency(b.amount)}`}
-                      </span>
-                      {!isVariable && !isOverBudget && (
-                        <span style={{ color: 'var(--success)', fontWeight: 600 }}>
-                          Quedan: {formatCurrency(b.amount - b.spent)}
-                        </span>
-                      )}
-                      {isOverBudget && <span style={{ color: 'var(--danger)', fontWeight: 600 }}>Excedido</span>}
-                    </div>
-                    {!isVariable && (
-                      <div className={styles.budgetProgressBg}>
-                        <div className={styles.budgetProgressFill} style={{ width: `${progress}%`, background: isOverBudget ? 'var(--danger)' : progress > 80 ? 'var(--warning)' : 'var(--accent-color)' }}></div>
-                      </div>
-                    )}
-                    {isVariable && (
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Presupuesto Flexible (Sin límite máximo)</span>
-                    )}
-                  </div>
-                </div>
-              )
-            })
-          )}
-        </div>
+      <div className="tiles four">
+        <div className="card"><div className="tile-label">Disponible</div><div className="tile-value">{clp(wealth.cash)}</div></div>
+        <div className="card"><div className="tile-label">Depósitos</div><div className="tile-value">{clp(wealth.deposits)}</div></div>
+        <div className="card"><div className="tile-label">Inversiones</div><div className="tile-value">{clp(wealth.investments)}</div></div>
+        <Link href="/debts" className="card"><div className="tile-label">Deudas</div><div className="tile-value">{clp(overview.total)}</div></Link>
       </div>
 
-      {isAccountModalOpen && (
-        <div className={styles.modalOverlay}>
-          <div className={styles.modal}>
-            <h3 className="h3">Crear Nueva Cuenta</h3>
-            <form onSubmit={handleCreateAccount} className={styles.form}>
-              <div className="input-group">
-                <label className="input-label">Nombre de la cuenta</label>
-                <input type="text" className="input-field" placeholder="Ej. Cuenta Vista" value={newAccountName} onChange={e => setNewAccountName(e.target.value)} required />
-              </div>
-              <div className="input-group">
-                <label className="input-label">Tipo</label>
-                <select className="input-field" value={newAccountType} onChange={e => setNewAccountType(e.target.value)}>
-                  <option>Cuenta Corriente</option>
-                  <option>Cuenta Vista / RUT</option>
-                  <option>Cuenta de Ahorro</option>
-                  <option>Tarjeta de Crédito</option>
-                  <option>Efectivo</option>
-                </select>
-              </div>
-              <div className={styles.modalActions}>
-                <button type="button" className="btn-secondary" onClick={() => setIsAccountModalOpen(false)}>Cancelar</button>
-                <button type="submit" className="btn-primary">Guardar Cuenta</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {GROUPS.map(group => {
+        const items = wealth.items.filter(a => a.asset_kind === group.kind);
+        if (!items.length) return null;
+        return (
+          <section className="card" key={group.kind}>
+            <h2 className="h3" style={{ marginBottom: '0.3rem' }}>{group.title}</h2>
+            <div className="list">
+              {items.map(a => (
+                <button key={a.id} className="row" onClick={() => setEditing(a)}>
+                  <span className="row-main">
+                    <span className="row-title" style={{ display: 'block' }}>{a.name}</span>
+                    <span className="row-sub" style={{ display: 'block' }}>
+                      {[a.institution, a.owner_label].filter(Boolean).join(' · ') || a.type}
+                      {a.maturity_date ? ` · vence ${shortDate(a.maturity_date)}` : ''}
+                    </span>
+                  </span>
+                  <span className="row-end">
+                    {clp(a.asset_kind === 'card' ? Math.max(0, -a.balance) : a.balance)}
+                    <small>{a.anchor_date ? `Al ${shortDate(a.anchor_date)}` : 'Sin confirmar'}</small>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
+        );
+      })}
 
-      {isBudgetModalOpen && (
-        <div className={styles.modalOverlay}>
-          <div className={styles.modal}>
-            <h3 className="h3">{editingBudgetId ? 'Editar Presupuesto' : 'Crear Presupuesto'}</h3>
-            <p className="text-secondary" style={{fontSize: '0.9rem', marginTop: '-0.5rem', marginBottom: '1.5rem'}}>
-              Define cuánto dinero máximo planeas gastar en esta categoría durante tu ciclo financiero.
-            </p>
-            {errorMsg && (
-              <div style={{ padding: '1rem', background: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger)', borderRadius: '0.75rem', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
-                {errorMsg}
-              </div>
-            )}
-            <form onSubmit={handleSaveBudget} className={styles.form}>
-              <div className="input-group">
-                <label className="input-label">Nombre de la categoría</label>
-                <input type="text" className="input-field" placeholder="Ej. Supermercado, Luz, Arriendo..." value={newBudgetName} onChange={e => setNewBudgetName(e.target.value)} required />
-              </div>
-              <div className="input-group">
-                <label className="input-label">Límite del Ciclo (Opcional)</label>
-                <input 
-                  type="number" 
-                  className="input-field" 
-                  placeholder="Dejar vacío si no hay límite fijo" 
-                  value={newBudgetAmount} 
-                  onChange={e => setNewBudgetAmount(e.target.value)} 
-                />
-              </div>
-              <div className={styles.modalActions}>
-                <button type="button" className="btn-secondary" onClick={closeBudgetModal}>Cancelar</button>
-                <button type="submit" className="btn-primary">Guardar Límite</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {editing && <BalanceSheet account={editing} onClose={() => setEditing(null)} />}
+      {adding && <NewAccountSheet data={data} onClose={() => setAdding(false)} />}
     </div>
   );
+}
+
+export default function AccountsPage() {
+  return <WithData>{data => <Wealth data={data} />}</WithData>;
 }

@@ -1,341 +1,129 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
-import styles from './dashboard.module.css';
+import { useMemo, useState } from 'react';
+import Link from 'next/link';
+import { Icon, Meter, WithData } from '@/components/ui';
+import { PaySheet } from '@/components/PaySheet';
+import { todayISO } from '@/lib/dates';
+import { clp, dueLabel, shortDate } from '@/lib/format';
+import { dayOf, type Household } from '@/lib/finance';
+import { buildPlan, debtOverview, type UpcomingPayment } from '@/lib/plan';
 
-export default function DashboardPage() {
-  const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState<any>(null);
-  const [totalBalance, setTotalBalance] = useState(0);
-  const [totalSavings, setTotalSavings] = useState(0);
-  const [totalDebt, setTotalDebt] = useState(0);
-  const [monthIncome, setMonthIncome] = useState(0);
-  const [monthExpense, setMonthExpense] = useState(0);
-  const [accounts, setAccounts] = useState<any[]>([]);
-  const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
-  const [budgetGoals, setBudgetGoals] = useState<any[]>([]);
-  const [lastCierreData, setLastCierreData] = useState<any>(null);
-  const [showReviewModal, setShowReviewModal] = useState(false);
+function Dashboard({ data }: { data: Household }) {
+  const today = todayISO();
+  const plan = useMemo(() => buildPlan(data, today), [data, today]);
+  const debts = useMemo(() => debtOverview(data, today), [data, today]);
+  const [paying, setPaying] = useState<UpcomingPayment | null>(null);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  async function loadData() {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-        if (profileData) setProfile(profileData);
-
-        const { data: accountsData } = await supabase.from('accounts').select('*');
-        const { data: transactionsData } = await supabase.from('transactions').select('*');
-        const { data: budgetsData } = await supabase.from('budgets').select('*');
-
-        const sortedTx = transactionsData 
-          ? [...transactionsData].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()) 
-          : [];
-
-        // Find the last "Cierre de Mes" marker
-        const lastReset = sortedTx.find(tx => tx.description === '🔄 Cierre de Mes');
-        const cycleStartDate = lastReset ? new Date(lastReset.created_at) : new Date(0);
-        setLastCierreData(lastReset || null);
-
-        const validTx = sortedTx.filter(tx => tx.description !== '🔄 Cierre de Mes' && tx.description !== '🔄 Rollover');
-
-        let globalBalance = 0;
-        let processedAccounts = accountsData?.map(acc => ({...acc, balance: 0})) || [];
-        
-        let mIncome = 0;
-        let mExpense = 0;
-        let budgetExpenses: Record<string, number> = {};
-
-        validTx.forEach(tx => {
-          const txDate = new Date(tx.created_at);
-          const isCurrentCycle = txDate > cycleStartDate;
-
-          if (tx.type === 'income') globalBalance += tx.amount;
-          if (tx.type === 'expense') globalBalance -= tx.amount;
-
-          const originAcc = processedAccounts.find(a => a.id === tx.account_id);
-          const destAcc = processedAccounts.find(a => a.id === tx.destination_account_id);
-
-          if (tx.type === 'income' && originAcc) originAcc.balance += tx.amount; 
-          if (tx.type === 'expense' && originAcc) originAcc.balance -= tx.amount;
-          if (tx.type === 'transfer') {
-            if (originAcc) originAcc.balance -= tx.amount;
-            if (destAcc) destAcc.balance += tx.amount;
-          }
-
-          if (isCurrentCycle) {
-            if (tx.type === 'income' && tx.description !== '[AHORRO] Saldo Inicial') mIncome += tx.amount;
-            if (tx.type === 'expense') {
-              mExpense += tx.amount;
-              if (tx.budget_id) {
-                budgetExpenses[tx.budget_id] = (budgetExpenses[tx.budget_id] || 0) + tx.amount;
-              }
-            }
-          }
-        });
-
-        // Calculate total savings and total debt
-        let tSavings = 0;
-        let tDebt = 0;
-        processedAccounts.forEach(acc => {
-          if (acc.type === 'Cuenta de Ahorro') {
-            tSavings += acc.balance;
-          }
-          if (acc.type === 'Tarjeta de Crédito') {
-            tDebt += Math.abs(acc.balance);
-          }
-        });
-
-        const bGoals = budgetsData?.map(b => {
-          return {
-            ...b,
-            amount: b.amount,
-            spent: budgetExpenses[b.id] || 0
-          };
-        }) || [];
-
-        setBudgetGoals(bGoals);
-        setRecentTransactions(validTx.slice(0, 5));
-        setAccounts(processedAccounts);
-        setTotalBalance(globalBalance);
-        setTotalSavings(tSavings);
-        setTotalDebt(tDebt);
-        setMonthIncome(mIncome);
-        setMonthExpense(mExpense);
-      }
-    } catch (error) {
-      console.error('Error loading data', error);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleCloseMonth() {
-    if (!window.confirm('¿Estás seguro de que quieres reiniciar el ciclo actual? Los medidores de tus límites y gastos del ciclo volverán a 0, pero tus saldos de dinero quedarán intactos.')) return;
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      
-      const { error } = await supabase.from('transactions').insert({
-        type: 'expense',
-        amount: 0,
-        description: '🔄 Cierre de Mes',
-        date: new Date().toISOString().split('T')[0],
-        user_id: user.id
-      });
-      if (error) throw error;
-      
-      await loadData();
-      setShowReviewModal(true);
-    } catch (err) {
-      console.error(err);
-      alert('Error al reiniciar el ciclo');
-    }
-  }
-
-  async function handleUndoCloseMonth() {
-    if (!lastCierreData) return;
-    if (!window.confirm('¿Estás seguro de que quieres deshacer el último reinicio? Se eliminará el marcador y los gastos volverán a sumar.')) return;
-    try {
-      const { error } = await supabase.from('transactions').delete().eq('id', lastCierreData.id);
-      if (error) throw error;
-
-      loadData();
-    } catch (err) {
-      console.error(err);
-      alert('Error al deshacer el reinicio');
-    }
-  }
-
-  const formatCurrency = (val: number) => `$${val.toLocaleString('es-CL')}`;
-
-  if (loading) return <div className={styles.loading}>Cargando resumen...</div>;
+  const urgent = plan.upcoming.filter(u => u.daysUntil <= 2);
+  const lastImport = data.transactions.filter(t => t.source === 'import').map(dayOf).sort().at(-1);
+  const hasPlan = plan.incomeTotal > 0;
+  const maxCategory = plan.categories[0]?.total ?? 0;
+  const uncategorized = plan.categories.find(c => c.id === null)?.total ?? 0;
 
   return (
-    <div className={styles.dashboard}>
-      <header className={styles.header}>
-        <div>
-          <h1 className="h2">Inicio</h1>
-          <p className="text-secondary">Bienvenido de vuelta, {profile?.full_name || 'Usuario'}.</p>
-        </div>
-        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-          {lastCierreData && (
-            <button 
-              onClick={handleUndoCloseMonth}
-              className="btn-secondary"
-              style={{ color: 'var(--danger)', borderColor: 'var(--danger-bg)' }}
-              title="Deshacer último reinicio"
-            >
-              Deshacer Reinicio
-            </button>
-          )}
-          <button onClick={handleCloseMonth} className="btn-secondary">
-            Reiniciar Ciclo
-          </button>
-          <button className="btn-primary" onClick={() => router.push('/transactions')}>
-            Nueva Transacción
-          </button>
-        </div>
-      </header>
-
-      {/* TOP METRICS ROW */}
-      <div className={styles.topMetrics}>
-        <div className="card">
-          <h3 className="h3" style={{ fontSize: '1rem', color: 'var(--text-secondary)' }}>Liquidez (Sin Ahorros)</h3>
-          <div className={styles.metricAmount} style={{ color: 'var(--text-primary)' }}>
-            {formatCurrency(totalBalance - totalSavings)}
-          </div>
-        </div>
-        <div className="card" style={{ borderColor: 'var(--accent-color)' }}>
-          <h3 className="h3" style={{ fontSize: '1rem', color: 'var(--accent-color)' }}>Ahorros Totales</h3>
-          <div className={styles.metricAmount} style={{ color: 'var(--text-primary)' }}>
-            {formatCurrency(totalSavings)}
-          </div>
-        </div>
-        <div className="card" style={{ borderColor: 'var(--danger)' }}>
-          <h3 className="h3" style={{ fontSize: '1rem', color: 'var(--danger)' }}>Deuda Tarjetas</h3>
-          <div className={styles.metricAmount} style={{ color: 'var(--danger)' }}>
-            {formatCurrency(totalDebt)}
-          </div>
-        </div>
-        <div className="card">
-          <h3 className="h3" style={{ fontSize: '1rem', color: 'var(--text-secondary)' }}>Ingresos del Ciclo</h3>
-          <div className={styles.metricAmount} style={{ color: 'var(--success)' }}>
-            +{formatCurrency(monthIncome)}
-          </div>
-        </div>
-        <div className="card">
-          <h3 className="h3" style={{ fontSize: '1rem', color: 'var(--text-secondary)' }}>Gastos del Ciclo</h3>
-          <div className={styles.metricAmount} style={{ color: 'var(--danger)' }}>
-            -{formatCurrency(monthExpense)}
-          </div>
-        </div>
-      </div>
-
-      {/* MIDDLE ROW: ACCOUNTS */}
-      <div className="card">
-        <h3 className="h3" style={{ marginBottom: '1.5rem' }}>Mis Cuentas</h3>
-        
-        <h4 className="text-secondary" style={{ marginBottom: '1rem', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Billeteras y Ahorros</h4>
-        <div className={styles.accountsGrid} style={{ marginBottom: '2rem' }}>
-          {accounts.filter(a => a.type !== 'Tarjeta de Crédito').length === 0 ? (
-            <p className="text-secondary" style={{ fontSize: '0.9rem' }}>No has creado billeteras.</p>
-          ) : accounts.filter(a => a.type !== 'Tarjeta de Crédito').map(acc => (
-            <div key={acc.id} className={styles.accountCard} onClick={() => router.push(`/transactions?account=${acc.id}`)}>
-              <div className={styles.accountInfo}>
-                <span className={styles.accountIcon}>{acc.type === 'Cuenta de Ahorro' ? '🐷' : '🏦'}</span>
-                <div>
-                  <div className={styles.accountName}>{acc.name}</div>
-                  <div className={styles.accountType}>{acc.type}</div>
-                </div>
-              </div>
-              <div className={styles.accountBalance}>
-                {formatCurrency(acc.balance)}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {accounts.filter(a => a.type === 'Tarjeta de Crédito').length > 0 && (
+    <div className="page">
+      <section className="card hero" aria-label="Disponible para gastar">
+        <div className="hero-label">Pueden gastar hasta el {shortDate(plan.cycle.end)}</div>
+        <div className="hero-value">{hasPlan ? clp(plan.remaining) : '—'}</div>
+        {hasPlan ? (
           <>
-            <h4 className="text-secondary" style={{ marginBottom: '1rem', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent-color)' }}>Tarjetas de Crédito</h4>
-            <div className={styles.accountsGrid}>
-              {accounts.filter(a => a.type === 'Tarjeta de Crédito').map(acc => (
-                <div key={acc.id} className={styles.accountCard} style={{ borderColor: 'var(--accent-color)' }} onClick={() => router.push(`/transactions?account=${acc.id}`)}>
-                  <div className={styles.accountInfo}>
-                    <span className={styles.accountIcon} style={{ color: 'var(--accent-color)' }}>💳</span>
-                    <div>
-                      <div className={styles.accountName}>{acc.name}</div>
-                      <div className={styles.accountType}>Deuda Actual</div>
-                    </div>
-                  </div>
-                  <div className={styles.accountBalance} style={{ color: acc.balance < 0 ? 'var(--danger)' : 'var(--text-primary)' }}>
-                    {formatCurrency(Math.abs(acc.balance))}
-                  </div>
-                </div>
-              ))}
+            <div className="hero-sub">
+              {plan.remaining > 0 ? `Unos ${clp(plan.perDay)} al día por ${plan.cycle.daysLeft} días` : 'Ya se pasaron de lo planificado en este ciclo'}
             </div>
+            <Meter value={plan.spent} max={plan.available} warnAt={2} />
+            <div className="hero-foot"><span>Gastado {clp(plan.spent)}</span><span>Plan {clp(plan.available)}</span></div>
           </>
+        ) : (
+          <div className="hero-sub">Agrega sus ingresos y gastos fijos en Ajustes para calcularlo.</div>
         )}
-      </div>
+      </section>
 
-      {/* BOTTOM ROW: LIMITS AND HISTORY */}
-      <div className={styles.bottomLayout}>
-        <div className="card">
-          <h3 className="h3" style={{ marginBottom: '1.5rem' }}>Límites de Gasto</h3>
-          <div className={styles.budgetGoalsList}>
-            {budgetGoals.length === 0 ? (
-              <p className="text-secondary" style={{ fontSize: '0.9rem' }}>No has creado límites de gasto.</p>
-            ) : budgetGoals.map(bg => {
-              const percentage = Math.min(100, Math.round((bg.spent / bg.amount) * 100)) || 0;
-              const isOver = percentage >= 100;
-              return (
-                <div key={bg.id} className={styles.budgetGoal}>
-                  <div className={styles.budgetGoalHeader}>
-                    <span>{bg.name}</span>
-                    <span style={{ color: isOver ? 'var(--danger)' : 'var(--text-primary)' }}>{percentage}%</span>
-                  </div>
-                  <div className={styles.budgetBarBg}>
-                    <div className={styles.budgetBarFill} style={{ width: `${percentage}%`, background: isOver ? 'var(--danger)' : percentage > 80 ? 'var(--warning)' : 'var(--accent-color)' }}></div>
-                  </div>
-                  <div className={styles.budgetGoalSub}>
-                    <span>Restante: {formatCurrency(Math.max(0, bg.amount - bg.spent))}</span>
-                    <span>{formatCurrency(bg.spent)} / {formatCurrency(bg.amount)}</span>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
+      {urgent.map(u => (
+        <button key={u.key} className={`notice ${u.overdue ? 'danger' : ''}`} style={{ border: 0, textAlign: 'left', width: '100%' }} onClick={() => setPaying(u)}>
+          <Icon name="alert" size={18} />
+          <span><strong>{u.title}: {clp(u.amount)}.</strong> {dueLabel(u.daysUntil)}. Toca para registrar el pago.</span>
+        </button>
+      ))}
 
-        <div className="card">
-          <h3 className="h3" style={{ marginBottom: '1.5rem' }}>Historial Reciente</h3>
-          {recentTransactions.length === 0 ? (
-            <p className="text-secondary" style={{ fontSize: '0.9rem' }}>No hay transacciones recientes en este ciclo.</p>
-          ) : (
-            <div className={styles.recentTxList}>
-              {recentTransactions.map(tx => (
-                <div key={tx.id} className={styles.recentTxItem}>
-                  <div className={styles.txInfo}>
-                    <span className={styles.txIcon}>{tx.type === 'income' ? '↓' : tx.type === 'expense' ? '↑' : '⇄'}</span>
-                    <div className={styles.txDetails}>
-                      <span className={styles.txTitle}>{tx.description}</span>
-                      <span className={styles.txDate}>{new Date(tx.date || tx.created_at).toLocaleDateString('es-CL')}</span>
-                    </div>
-                  </div>
-                  <span className={styles.txAmount} style={{ color: tx.type === 'income' ? 'var(--success)' : tx.type === 'expense' ? 'var(--danger)' : 'var(--text-primary)' }}>
-                    {tx.type === 'expense' ? '-' : tx.type === 'income' ? '+' : ''}{formatCurrency(tx.amount)}
+      {hasPlan && plan.cashAfterPayments < 0 && (
+        <div className="notice"><Icon name="alert" size={18} /><span>Con el dinero disponible y los ingresos pendientes faltan <strong>{clp(-plan.cashAfterPayments)}</strong> para cubrir los pagos de este ciclo.</span></div>
+      )}
+
+      <div className="columns">
+        <div className="stack">
+          <section className="card">
+            <div className="card-head"><h2 className="h3">Próximos pagos</h2><span className="text-muted">{clp(plan.dueInCycle)} este ciclo</span></div>
+            <div className="list">
+              {plan.upcoming.length === 0 && <p className="text-muted">No hay pagos pendientes.</p>}
+              {plan.upcoming.slice(0, 7).map(u => (
+                <button key={u.key} className="row" onClick={() => setPaying(u)}>
+                  <span className="row-main">
+                    <span className="row-title" style={{ display: 'block' }}>{u.title}</span>
+                    <span className="row-sub" style={{ display: 'block' }}>{u.detail} · {shortDate(u.date)}</span>
                   </span>
-                </div>
+                  <span className="row-end">{clp(u.amount)}<small className={u.overdue ? 'neg' : ''}>{dueLabel(u.daysUntil)}</small></span>
+                </button>
               ))}
             </div>
+          </section>
+
+          {hasPlan && (
+            <section className="card">
+              <h2 className="h3" style={{ marginBottom: '0.5rem' }}>Cómo se reparte el ciclo</h2>
+              <div className="list">
+                <div className="row"><span className="row-main">Ingresos</span><span className="row-end pos">{clp(plan.incomeTotal)}</span></div>
+                <div className="row"><span className="row-main">Gastos fijos</span><span className="row-end">-{clp(plan.fixedTotal)}</span></div>
+                <div className="row"><span className="row-main">Cuotas de deudas</span><span className="row-end">-{clp(plan.installmentsTotal)}</span></div>
+                {plan.extraDebt > 0 && <div className="row"><span className="row-main">Abono extra a deudas</span><span className="row-end">-{clp(plan.extraDebt)}</span></div>}
+                <div className="row"><span className="row-main"><strong>Para gastar</strong></span><span className="row-end">{clp(plan.available)}</span></div>
+              </div>
+            </section>
           )}
         </div>
+
+        <div className="stack">
+          <div className="tiles">
+            <Link href="/debts" className="card tile">
+              <div className="tile-label">Deuda total</div>
+              <div className="tile-value">{clp(debts.total)}</div>
+              <div className="tile-sub">{clp(debts.monthlyInstallments)} en cuotas al mes</div>
+            </Link>
+            <Link href="/accounts" className="card tile">
+              <div className="tile-label">Patrimonio neto</div>
+              <div className="tile-value">{clp(debts.netWorth)}</div>
+              <div className="tile-sub">Activos {clp(debts.wealth.assets)}</div>
+            </Link>
+          </div>
+
+          <section className="card">
+            <div className="card-head"><h2 className="h3">En qué se ha ido</h2><Link className="card-link" href="/reports">Ver análisis</Link></div>
+            {plan.categories.length === 0 && <p className="text-muted">Aún no hay gastos en este ciclo.</p>}
+            {plan.categories.slice(0, 6).map(c => (
+              <div key={c.id ?? 'none'} className="hbar">
+                <span>{c.name}</span>
+                <span className="num">{clp(c.total)}{c.limit > 0 ? ` / ${clp(c.limit)}` : ''}</span>
+                <Meter value={c.total} max={c.limit > 0 ? c.limit : maxCategory} warnAt={c.limit > 0 ? 0.85 : 2} />
+              </div>
+            ))}
+            {uncategorized > 0 && <Link className="card-link" href="/transactions?category=none">Ordenar lo que está sin categoría</Link>}
+          </section>
+
+          <Link href="/import" className="card" style={{ display: 'flex', gap: '0.7rem', alignItems: 'center' }}>
+            <Icon name="upload" />
+            <span className="row-main">
+              <span className="row-title" style={{ display: 'block' }}>Importar cartolas</span>
+              <span className="row-sub" style={{ display: 'block' }}>{lastImport ? `Última al ${shortDate(lastImport)}` : 'Sube sus PDF y se ordena solo'}</span>
+            </span>
+          </Link>
+        </div>
       </div>
 
-      {showReviewModal && (
-        <div className={styles.modalOverlay}>
-          <div className={styles.modal}>
-            <h2 className="h2" style={{ marginBottom: '1rem' }}>¡Ciclo Reiniciado! 🎯</h2>
-            <p className="text-secondary" style={{ marginBottom: '1.5rem', lineHeight: '1.5' }}>
-              Has reiniciado exitosamente los contadores para este nuevo ciclo. Tus saldos bancarios siguen intactos.
-              <br/><br/>
-              Si tus límites de gastos cambiaron, aprovecha de ajustarlos ahora.
-            </p>
-            <div className={styles.modalActions}>
-              <button className="btn-secondary" onClick={() => setShowReviewModal(false)}>Más tarde</button>
-              <button className="btn-primary" onClick={() => router.push('/accounts')}>Ir a ajustar límites</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {paying && <PaySheet data={data} payment={paying} onClose={() => setPaying(null)} />}
     </div>
   );
+}
+
+export default function DashboardPage() {
+  return <WithData>{data => <Dashboard data={data} />}</WithData>;
 }

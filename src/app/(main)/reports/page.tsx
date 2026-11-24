@@ -1,148 +1,85 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
-import styles from './reports.module.css';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
+import { useMemo } from 'react';
+import { Meter, WithData } from '@/components/ui';
+import { todayISO } from '@/lib/dates';
+import { clp, shortDate } from '@/lib/format';
+import { dayOf, isAdjustment, isMarker, type Household } from '@/lib/finance';
+import { cycleHistory } from '@/lib/plan';
 
-export default function ReportsPage() {
-  const [loading, setLoading] = useState(true);
-  const [cycles, setCycles] = useState<any[]>([]);
+function Analysis({ data }: { data: Household }) {
+  const today = todayISO();
+  const cycles = useMemo(
+    () => cycleHistory(data, today, 6).filter(c => c.income > 0 || c.expense > 0),
+    [data, today],
+  );
+  const closed = cycles.slice(0, -1);
+  const average = closed.length ? closed.reduce((s, c) => s + c.expense, 0) / closed.length : 0;
+  const maxExpense = Math.max(1, ...cycles.map(c => c.expense));
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  async function loadData() {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data: transactionsData } = await supabase
-        .from('transactions')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: true }); // Oldest first
-
-      if (!transactionsData) {
-        setCycles([]);
-        return;
-      }
-
-      const generatedCycles: any[] = [];
-      let currentCycleIncome = 0;
-      let currentCycleExpense = 0;
-      let cycleCount = 1;
-      let cycleStartDate = transactionsData.length > 0 ? new Date(transactionsData[0].created_at) : new Date();
-
-      transactionsData.forEach((tx) => {
-        if (tx.description === '🔄 Cierre de Mes') {
-          // Finish the current cycle
-          generatedCycles.push({
-            id: `cycle-${cycleCount}`,
-            name: `Ciclo ${cycleCount}`,
-            startDate: cycleStartDate,
-            endDate: new Date(tx.created_at),
-            Ingresos: currentCycleIncome,
-            Gastos: currentCycleExpense,
-            Neto: currentCycleIncome - currentCycleExpense
-          });
-          cycleCount++;
-          // Reset for next cycle
-          currentCycleIncome = 0;
-          currentCycleExpense = 0;
-          cycleStartDate = new Date(tx.created_at);
-        } else {
-          // Add to current cycle
-          if (tx.type === 'income' && tx.description !== '[AHORRO] Saldo Inicial') currentCycleIncome += tx.amount;
-          if (tx.type === 'expense' && tx.description !== '🔄 Rollover') currentCycleExpense += tx.amount;
-        }
-      });
-
-      // Add the final (current) cycle
-      generatedCycles.push({
-        id: 'cycle-current',
-        name: 'Ciclo Actual',
-        startDate: cycleStartDate,
-        endDate: new Date(),
-        Ingresos: currentCycleIncome,
-        Gastos: currentCycleExpense,
-        Neto: currentCycleIncome - currentCycleExpense
-      });
-
-      setCycles(generatedCycles);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
+  const categories = useMemo(() => {
+    const first = cycles[0]?.start ?? today;
+    const totals = new Map<string | null, number>();
+    for (const t of data.transactions) {
+      if (t.type !== 'expense' || isMarker(t) || isAdjustment(t) || dayOf(t) < first) continue;
+      totals.set(t.budget_id, (totals.get(t.budget_id) ?? 0) + Number(t.amount));
     }
-  }
-
-  const formatCurrency = (val: number) => `$${val.toLocaleString('es-CL')}`;
-
-  const formatDate = (date: Date) => {
-    return date.toLocaleDateString('es-CL', { month: 'short', day: 'numeric', year: 'numeric' });
-  };
-
-  if (loading) return <div className={styles.loading}>Cargando reportes...</div>;
+    const count = Math.max(1, cycles.length);
+    return [...totals.entries()]
+      .map(([id, total]) => ({ id, name: data.budgets.find(b => b.id === id)?.name ?? 'Sin categoría', total, perCycle: total / count }))
+      .sort((a, b) => b.total - a.total);
+  }, [data, cycles, today]);
 
   return (
-    <div className={styles.container}>
-      <header className={styles.header}>
-        <div>
-          <h1 className="h2">Reportes Históricos</h1>
-          <p className="text-secondary">Visualiza tu rendimiento financiero a lo largo de cada ciclo.</p>
-        </div>
-      </header>
+    <div className="page">
+      <h1 className="h1">Análisis</h1>
 
-      <div className={styles.grid}>
-        <div className={`card ${styles.chartCard}`}>
-          <h3 className="h3" style={{ marginBottom: '1.5rem' }}>Evolución de Ciclos</h3>
-          <div style={{ height: 400 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={cycles} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-color)" />
-                <XAxis dataKey="name" stroke="var(--text-secondary)" />
-                <YAxis stroke="var(--text-secondary)" tickFormatter={(value) => `$${value/1000}k`} />
-                <RechartsTooltip formatter={(value: any) => formatCurrency(Number(value))} cursor={{fill: 'rgba(0,0,0,0.05)'}} />
-                <Legend />
-                <Bar dataKey="Ingresos" fill="var(--success)" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Gastos" fill="var(--danger)" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+      <section className="card">
+        <div className="card-head">
+          <h2 className="h3">Gastos por ciclo</h2>
+          {average > 0 && <span className="text-muted">Promedio {clp(average)}</span>}
         </div>
+        <div className="cols-bars" role="img" aria-label="Gastos de cada ciclo; el detalle está en la tabla siguiente">
+          {cycles.map((c, i) => (
+            <div key={c.start} className={`col-bar ${i === cycles.length - 1 ? 'current' : ''}`} title={`${shortDate(c.start)} a ${shortDate(c.end)}: ${clp(c.expense)}`}>
+              <i style={{ height: `${(c.expense / maxExpense) * 100}%` }} />
+            </div>
+          ))}
+        </div>
+        <div className="col-labels">{cycles.map(c => <span key={c.start}>{shortDate(c.start)}</span>)}</div>
+      </section>
 
-        <div className="card">
-          <h3 className="h3" style={{ marginBottom: '1rem' }}>Detalle de Ciclos</h3>
-          <div className={styles.feedList}>
-            {cycles.map((cycle) => (
-              <div key={cycle.id} className={styles.feedItem}>
-                <div className={styles.feedDetails}>
-                  <span className={styles.feedTitle}>{cycle.name}</span>
-                  <span className={styles.feedMeta}>{formatDate(cycle.startDate)} - {formatDate(cycle.endDate)}</span>
+      <div className="columns">
+        <section className="card">
+          <h2 className="h3" style={{ marginBottom: '0.3rem' }}>Detalle de ciclos</h2>
+          <div className="list">
+            {[...cycles].reverse().map(c => (
+              <div className="row" key={c.start}>
+                <div className="row-main">
+                  <div className="row-title">{shortDate(c.start)} a {shortDate(c.end)}</div>
+                  <div className="row-sub">Entró {clp(c.income)} · salió {clp(c.expense)}</div>
                 </div>
-                <div className={styles.feedAmounts}>
-                  <div className={styles.amountBlock}>
-                    <span className={styles.amountLabel}>Ingresos</span>
-                    <span className={styles.amountPositive}>{formatCurrency(cycle.Ingresos)}</span>
-                  </div>
-                  <div className={styles.amountBlock}>
-                    <span className={styles.amountLabel}>Gastos</span>
-                    <span className={styles.amountNegative}>{formatCurrency(cycle.Gastos)}</span>
-                  </div>
-                  <div className={styles.amountBlock}>
-                    <span className={styles.amountLabel}>Flujo Neto</span>
-                    <span className={cycle.Neto > 0 ? styles.amountPositive : cycle.Neto < 0 ? styles.amountNegative : styles.amountNeutral}>
-                      {formatCurrency(cycle.Neto)}
-                    </span>
-                  </div>
-                </div>
+                <div className={`row-end ${c.net >= 0 ? 'pos' : 'neg'}`}>{c.net >= 0 ? '+' : ''}{clp(c.net)}</div>
               </div>
             ))}
           </div>
-        </div>
+        </section>
+
+        <section className="card">
+          <h2 className="h3" style={{ marginBottom: '0.3rem' }}>Categorías</h2>
+          {categories.map(c => (
+            <div className="hbar" key={c.id ?? 'none'}>
+              <span>{c.name}</span>
+              <span className="num">{clp(c.perCycle)} / ciclo</span>
+              <Meter value={c.total} max={categories[0].total} warnAt={2} />
+            </div>
+          ))}
+        </section>
       </div>
     </div>
   );
+}
+
+export default function ReportsPage() {
+  return <WithData>{data => <Analysis data={data} />}</WithData>;
 }
