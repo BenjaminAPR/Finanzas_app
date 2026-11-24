@@ -1,255 +1,118 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { supabase } from '@/lib/supabase';
-import { formatDate, todayISO } from '@/lib/dates';
-import { summarize } from '@/lib/finance';
-import { useHouseholdData } from '@/lib/store';
-import styles from './transactions.module.css';
+import { Suspense, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import { Icon, WithData } from '@/components/ui';
+import { TransactionSheet } from '@/components/TransactionSheet';
+import { useQuickAdd } from '@/components/AppShell';
+import { clp, longDate } from '@/lib/format';
+import { dayOf, normalize, visibleTransactions, type Household, type Transaction } from '@/lib/finance';
 
-export default function TransactionsPage() {
-  const { data, loading, error, refresh: loadData } = useHouseholdData();
-  const [isModalOpen, setIsModalOpen] = useState(false);
+const PAGE_STEP = 80;
 
-  // Filters
-  const [filterAccountId, setFilterAccountId] = useState('');
-  const [filterBudgetId, setFilterBudgetId] = useState('');
+function Movements({ data }: { data: Household }) {
+  const params = useSearchParams();
+  const openAdd = useQuickAdd();
+  const [search, setSearch] = useState('');
+  const [accountId, setAccountId] = useState(params.get('account') ?? '');
+  const [category, setCategory] = useState(params.get('category') ?? params.get('budget') ?? '');
+  const [limit, setLimit] = useState(PAGE_STEP);
+  const [editing, setEditing] = useState<Transaction | null>(null);
 
-  // Form State
-  const [type, setType] = useState('expense');
-  const [amount, setAmount] = useState('');
-  const [description, setDescription] = useState('');
-  const [date, setDate] = useState(todayISO);
-  const [selectedAccountId, setAccountId] = useState('');
-  const [destinationAccountId, setDestinationAccountId] = useState('');
-  const [budgetId, setBudgetId] = useState('');
+  const accountName = useMemo(() => new Map(data.accounts.map(a => [a.id, a.name])), [data.accounts]);
+  const budgetName = useMemo(() => new Map(data.budgets.map(b => [b.id, b.name])), [data.budgets]);
+  const all = useMemo(() => visibleTransactions(data.transactions), [data.transactions]);
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const urlParams = new URLSearchParams(window.location.search);
-      const accountParam = urlParams.get('account');
-      const budgetParam = urlParams.get('budget');
-      if (accountParam) setFilterAccountId(accountParam);
-      if (budgetParam) setFilterBudgetId(budgetParam);
+  const filtered = useMemo(() => {
+    const query = normalize(search);
+    return all.filter(t => {
+      if (accountId && t.account_id !== accountId && t.destination_account_id !== accountId) return false;
+      if (category === 'none' && (t.type !== 'expense' || t.budget_id)) return false;
+      if (category && category !== 'none' && t.budget_id !== category) return false;
+      return !query || normalize(t.description ?? '').includes(query);
+    });
+  }, [all, search, accountId, category]);
+
+  const groups = useMemo(() => {
+    const byDay = new Map<string, Transaction[]>();
+    for (const t of filtered.slice(0, limit)) {
+      const day = dayOf(t);
+      if (!byDay.has(day)) byDay.set(day, []);
+      byDay.get(day)!.push(t);
     }
-    
-  }, []);
+    return [...byDay.entries()];
+  }, [filtered, limit]);
 
-  const accounts = useMemo(() => data?.accounts ?? [], [data]);
-  const budgets = useMemo(() => data?.budgets ?? [], [data]);
-  const accountId = selectedAccountId || accounts[0]?.id || '';
-  const transactions = useMemo(() => {
-    if (!data) return [];
-    const accountName = new Map(data.accounts.map(a => [a.id, a.name]));
-    const budgetName = new Map(data.budgets.map(b => [b.id, b.name]));
-    return summarize(data.accounts, data.budgets, data.transactions).visible.map(t => ({
-      ...t,
-      originName: t.account_id ? accountName.get(t.account_id) : undefined,
-      destinationName: t.destination_account_id ? accountName.get(t.destination_account_id) : undefined,
-      budgetName: t.budget_id ? budgetName.get(t.budget_id) : undefined,
-    }));
-  }, [data]);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (type === 'transfer' && destinationAccountId === accountId) {
-      alert('La cuenta de origen y destino deben ser distintas');
-      return;
-    }
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const payload: any = {
-        type,
-        amount: parseFloat(amount),
-        description,
-        date,
-        account_id: accountId || null,
-        user_id: user.id
-      };
-
-      if (type === 'transfer') {
-        payload.destination_account_id = destinationAccountId || null;
-      }
-      if (type === 'expense' && budgetId) {
-        payload.budget_id = budgetId;
-      }
-
-      const { error } = await supabase.from('transactions').insert(payload);
-      if (error) throw error;
-
-      setIsModalOpen(false);
-      // Reset form
-      setAmount('');
-      setDescription('');
-      loadData();
-    } catch (err) {
-      console.error(err);
-      alert('Error al guardar el movimiento');
-    }
-  }
-
-  async function handleDeleteTransaction(id: string) {
-    if (!window.confirm('¿Estás seguro de que quieres eliminar este movimiento?')) return;
-    try {
-      const { error } = await supabase.from('transactions').delete().eq('id', id);
-      if (error) throw error;
-      loadData();
-    } catch (err) {
-      console.error(err);
-      alert('Error al eliminar el movimiento');
-    }
-  }
-
-  const formatCurrency = (val: number) => `$${val.toLocaleString('es-CL')}`;
-
-  if (loading) return <div className={styles.loading}>Cargando movimientos...</div>;
-  if (error && !data) return <div className={styles.loading}>{error}</div>;
+  const total = filtered.reduce((s, t) => s + (t.type === 'expense' ? Number(t.amount) : 0), 0);
 
   return (
-    <div className={styles.page}>
-      <header className={styles.header}>
-        <div>
-          <h1 className="h2">Historial de Transacciones</h1>
-          <p className="text-secondary">Revisa y registra tus ingresos, egresos y transferencias.</p>
+    <div className="page">
+      <div className="page-head">
+        <h1 className="h1">Movimientos</h1>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <Link href="/import" className="btn-secondary btn-small"><Icon name="upload" size={16} />Importar</Link>
+          <button className="btn-primary btn-small" onClick={openAdd}><Icon name="plus" size={16} />Agregar</button>
         </div>
-        <button className="btn-primary" onClick={() => setIsModalOpen(true)}>
-          Nueva Transacción
-        </button>
-      </header>
-
-      <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
-        <select className="input-field" style={{ flex: '1 1 200px' }} value={filterAccountId} onChange={e => setFilterAccountId(e.target.value)}>
-          <option value="">Todas las Billeteras</option>
-          {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.name}</option>)}
-        </select>
-        <select className="input-field" style={{ flex: '1 1 200px' }} value={filterBudgetId} onChange={e => setFilterBudgetId(e.target.value)}>
-          <option value="">Todos los Límites</option>
-          {budgets.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-        </select>
-        {(filterAccountId || filterBudgetId) && (
-          <button className="btn-secondary" style={{ flex: '1 1 100%' }} onClick={() => { setFilterAccountId(''); setFilterBudgetId(''); }}>
-            Limpiar Filtros
-          </button>
-        )}
       </div>
 
-      <div className={styles.feedList}>
-        {transactions.length === 0 ? (
-          <div className={styles.emptyState}>No hay movimientos registrados.</div>
-        ) : (
-          transactions.filter(t => {
-            if (filterAccountId && t.account_id !== filterAccountId && t.destination_account_id !== filterAccountId) return false;
-            if (filterBudgetId && t.budget_id !== filterBudgetId) return false;
-            return true;
-          }).map(t => (
-            <div key={t.id} className={styles.feedItem}>
-              <div className={styles.feedInfo}>
-                <span className={`${styles.feedIcon} ${t.type === 'income' ? styles.iconIncome : t.type === 'expense' ? styles.iconExpense : styles.iconTransfer}`}>
-                  {t.type === 'income' ? '↓' : t.type === 'expense' ? '↑' : '⇄'}
-                </span>
-                <div className={styles.feedDetails}>
-                  <span className={styles.feedTitle}>{t.description}</span>
-                  <div className={styles.feedMeta}>
-                    <span>{formatDate(t.date || t.created_at)}</span>
-                    {t.budgetName && <span>• {t.budgetName}</span>}
-                    <span>• {t.type === 'transfer' ? `${t.originName} ➔ ${t.destinationName}` : t.originName}</span>
-                  </div>
-                </div>
-              </div>
-              <div className={styles.feedAmount}>
-                <span style={{ color: t.type === 'expense' ? 'var(--danger)' : t.type === 'income' ? 'var(--success)' : 'var(--text-primary)' }}>
-                  {t.type === 'expense' ? '-' : t.type === 'income' ? '+' : ''}{formatCurrency(t.amount)}
-                </span>
-                <button 
-                  onClick={() => handleDeleteTransaction(t.id)} 
-                  className={styles.deleteBtn}
-                  title="Eliminar movimiento"
-                >
-                  🗑️
+      <input className="input-field" type="search" placeholder="Buscar" aria-label="Buscar movimientos" value={search} onChange={e => setSearch(e.target.value)} />
+
+      <div className="form-row">
+        <select className="input-field" aria-label="Filtrar por cuenta" value={accountId} onChange={e => setAccountId(e.target.value)}>
+          <option value="">Todas las cuentas</option>
+          {data.accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+        </select>
+        <select className="input-field" aria-label="Filtrar por categoría" value={category} onChange={e => setCategory(e.target.value)}>
+          <option value="">Todas las categorías</option>
+          <option value="none">Sin categoría</option>
+          {data.budgets.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+        </select>
+      </div>
+
+      <p className="text-muted">{filtered.length} movimientos · {clp(total)} en gastos</p>
+
+      <section className="card" style={{ paddingTop: '0.3rem' }}>
+        {groups.length === 0 && <p className="text-muted" style={{ padding: '0.7rem 0' }}>No hay movimientos con estos filtros.</p>}
+        {groups.map(([day, items]) => (
+          <div key={day}>
+            <div className="day-title">{longDate(day)}</div>
+            <div className="list">
+              {items.map(t => (
+                <button key={t.id} className="row" onClick={() => setEditing(t)}>
+                  <span className="row-main">
+                    <span className="row-title" style={{ display: 'block' }}>{t.description}</span>
+                    <span className="row-sub" style={{ display: 'block' }}>
+                      {t.type === 'transfer'
+                        ? `${accountName.get(t.account_id ?? '') ?? '?'} → ${accountName.get(t.destination_account_id ?? '') ?? '?'}`
+                        : accountName.get(t.account_id ?? '') ?? 'Sin cuenta'}
+                      {t.budget_id ? ` · ${budgetName.get(t.budget_id) ?? ''}` : ''}
+                    </span>
+                  </span>
+                  <span className={`row-end ${t.type === 'income' ? 'pos' : ''}`}>
+                    {t.type === 'income' ? '+' : t.type === 'expense' ? '-' : ''}{clp(Number(t.amount))}
+                    {t.type === 'expense' && !t.budget_id && <small><span className="badge warn">Sin categoría</span></small>}
+                  </span>
                 </button>
-              </div>
+              ))}
             </div>
-          ))
-        )}
-      </div>
-
-      {isModalOpen && (
-        <div className={styles.modalOverlay}>
-          <div className={`card ${styles.modal}`}>
-            <h3 className="h3">Nuevo Movimiento</h3>
-            
-            {accounts.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '2rem 0' }}>
-                <p className="text-secondary" style={{ marginBottom: '1.5rem' }}>
-                  No tienes ninguna billetera creada. Debes crear una primero para poder registrar movimientos.
-                </p>
-                <div className={styles.modalActions} style={{ justifyContent: 'center' }}>
-                  <button type="button" className="btn-secondary" onClick={() => setIsModalOpen(false)}>Cerrar</button>
-                  <button type="button" className="btn-primary" onClick={() => window.location.href = '/accounts'}>Crear Billetera</button>
-                </div>
-              </div>
-            ) : (
-              <form onSubmit={handleSubmit} className={styles.form}>
-                
-                <div className={styles.typeSelector}>
-                  <button type="button" className={`${styles.typeBtn} ${type === 'expense' ? styles.activeExpense : ''}`} onClick={() => setType('expense')}>Egreso</button>
-                  <button type="button" className={`${styles.typeBtn} ${type === 'income' ? styles.activeIncome : ''}`} onClick={() => setType('income')}>Ingreso</button>
-                  <button type="button" className={`${styles.typeBtn} ${type === 'transfer' ? styles.activeTransfer : ''}`} onClick={() => setType('transfer')}>Transferencia</button>
-                </div>
-
-                <div className="input-group">
-                  <label className="input-label">Monto</label>
-                  <input type="number" min="1" step="1" inputMode="numeric" className="input-field" placeholder="0" value={amount} onChange={e => setAmount(e.target.value)} required />
-                </div>
-
-                <div className="input-group">
-                  <label className="input-label">Descripción</label>
-                  <input type="text" className="input-field" placeholder="Ej. Supermercado, Sueldo..." value={description} onChange={e => setDescription(e.target.value)} required />
-                </div>
-
-                <div className="input-group">
-                  <label className="input-label">Fecha</label>
-                  <input type="date" className="input-field" value={date} onChange={e => setDate(e.target.value)} required />
-                </div>
-
-                <div className="input-group">
-                  <label className="input-label">{type === 'income' ? 'Cuenta de Destino' : 'Cuenta de Origen'}</label>
-                  <select className="input-field" value={accountId} onChange={e => setAccountId(e.target.value)} required>
-                    {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.name}</option>)}
-                  </select>
-                </div>
-
-                {type === 'transfer' && (
-                  <div className="input-group">
-                    <label className="input-label">Cuenta de Destino</label>
-                    <select className="input-field" value={destinationAccountId} onChange={e => setDestinationAccountId(e.target.value)} required>
-                      <option value="">Selecciona cuenta</option>
-                      {accounts.filter(a => a.id !== accountId).map(acc => <option key={acc.id} value={acc.id}>{acc.name}</option>)}
-                    </select>
-                  </div>
-                )}
-
-                {type === 'expense' && (
-                  <div className="input-group">
-                    <label className="input-label">Presupuesto (Opcional)</label>
-                    <select className="input-field" value={budgetId} onChange={e => setBudgetId(e.target.value)}>
-                      <option value="">Ninguno</option>
-                      {budgets.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                    </select>
-                  </div>
-                )}
-
-                <div className={styles.modalActions}>
-                  <button type="button" className="btn-secondary" onClick={() => setIsModalOpen(false)}>Cancelar</button>
-                  <button type="submit" className="btn-primary">Guardar</button>
-                </div>
-              </form>
-            )}
           </div>
-        </div>
+        ))}
+      </section>
+
+      {filtered.length > limit && (
+        <button className="btn-secondary" onClick={() => setLimit(l => l + PAGE_STEP)}>Ver más</button>
       )}
+
+      {editing && <TransactionSheet data={data} transaction={editing} onClose={() => setEditing(null)} />}
     </div>
+  );
+}
+
+export default function TransactionsPage() {
+  return (
+    <Suspense>
+      <WithData>{data => <Movements data={data} />}</WithData>
+    </Suspense>
   );
 }

@@ -1,403 +1,221 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
+import { Icon, Meter, Sheet, WithData } from '@/components/ui';
+import { PaySheet } from '@/components/PaySheet';
 import { supabase } from '@/lib/supabase';
-import { addMonths, formatDate, todayISO } from '@/lib/dates';
-import { splitInstallments } from '@/lib/finance';
+import { addMonths, todayISO } from '@/lib/dates';
+import { clp, dueLabel, monthsLabel, monthYear, shortDate } from '@/lib/format';
+import { splitInstallments, type Household } from '@/lib/finance';
+import { debtOverview, simulatePayoff, type DebtItem, type PayoffOrder, type UpcomingPayment } from '@/lib/plan';
 import { refreshData } from '@/lib/store';
-import styles from './debts.module.css';
 
-export default function DebtsPage() {
-  const [debts, setDebts] = useState<any[]>([]);
-  const [accounts, setAccounts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [name, setName] = useState('');
-  const [totalAmount, setTotalAmount] = useState('');
-  const [installmentsCount, setInstallmentsCount] = useState('1');
+const daysBetween = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / 86_400_000);
 
-  // Pay Installment Modal
-  const [isPayModalOpen, setIsPayModalOpen] = useState(false);
-  const [selectedInstallment, setSelectedInstallment] = useState<any>(null);
-  const [payAccountId, setPayAccountId] = useState('');
-  const [payAmount, setPayAmount] = useState('');
-  const [isHistorical, setIsHistorical] = useState(false);
+function toPayment(item: DebtItem, today: string): UpcomingPayment | null {
+  if (!item.next) return null;
+  return {
+    key: item.next.id,
+    kind: 'installment',
+    title: item.debt.creditor ? `${item.debt.name} (${item.debt.creditor})` : item.debt.name,
+    detail: `Cuota ${item.next.installment_number}`,
+    date: item.next.due_date,
+    amount: Number(item.next.amount),
+    overdue: item.next.due_date < today,
+    daysUntil: daysBetween(today, item.next.due_date),
+    installment: item.next,
+  };
+}
 
-  // Edit Installment Modal
-  const [isEditInstModalOpen, setIsEditInstModalOpen] = useState(false);
-  const [selectedEditInst, setSelectedEditInst] = useState<any>(null);
-  const [editInstAmount, setEditInstAmount] = useState('');
-
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  async function loadData() {
-    try {
-      const [debtsRes, accountsRes] = await Promise.all([
-        supabase.from('debts').select(`*, installments(*)`).order('created_at', { ascending: false }),
-        supabase.from('accounts').select('*')
-      ]);
-
-      if (debtsRes.data) setDebts(debtsRes.data);
-      if (accountsRes.data) {
-        setAccounts(accountsRes.data);
-        if (accountsRes.data.length > 0) setPayAccountId(accountsRes.data[0].id);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleCreateDebt(e: React.FormEvent) {
-    e.preventDefault();
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const debtAmount = parseFloat(totalAmount);
-      const count = parseInt(installmentsCount);
-
-      const { data: newDebt, error: debtError } = await supabase
-        .from('debts')
-        .insert({
-          name,
-          total_amount: debtAmount,
-          user_id: user.id
-        })
-        .select()
-        .single();
-      
-      if (debtError) throw debtError;
-
-      const amounts = splitInstallments(debtAmount, count);
-      const firstDue = todayISO();
-      const installmentsPayload = amounts.map((amount, i) => ({
-        debt_id: newDebt.id,
-        installment_number: i + 1,
-        amount,
-        due_date: addMonths(firstDue, i),
-        status: 'pending'
-      }));
-
-      const { error: instError } = await supabase.from('installments').insert(installmentsPayload);
-      if (instError) throw instError;
-
-      setIsModalOpen(false);
-      setName('');
-      setTotalAmount('');
-      setInstallmentsCount('1');
-      loadData();
-    } catch (err) {
-      console.error(err);
-      alert('Error creando deuda');
-    }
-  }
-
-  async function handlePayInstallment(e: React.FormEvent) {
-    e.preventDefault();
-    if (!selectedInstallment) return;
-    if (!isHistorical && !payAccountId) {
-      alert("Debes seleccionar una cuenta de origen o marcar la opción de pago histórico.");
-      return;
-    }
-
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const debt = debts.find(d => d.id === selectedInstallment.debt_id);
-      const actualAmount = parseFloat(payAmount);
-      const originalAmount = selectedInstallment.amount;
-      const difference = actualAmount - originalAmount;
-
-      let txId = null;
-
-      if (!isHistorical) {
-        // 1. Crear transacción de egreso por el monto real pagado
-        const { data: tx, error: txError } = await supabase.from('transactions').insert({
-          type: 'expense',
-          amount: actualAmount,
-          description: `Pago Cuota ${selectedInstallment.installment_number} - ${debt?.name}`,
-          date: todayISO(),
-          account_id: payAccountId,
-          user_id: user.id
-        }).select().single();
-
-        if (txError) throw txError;
-        txId = tx.id;
-      }
-
-      // 2. Marcar cuota como pagada y actualizar su monto real
-      const { error: instError } = await supabase.from('installments')
-        .update({ 
-          status: 'paid', 
-          paid_date: todayISO(), 
-          transaction_id: txId,
-          amount: actualAmount 
-        })
-        .eq('id', selectedInstallment.id);
-
-      if (instError) throw instError;
-
-      // 3. Si hay diferencia, ajustarla en la última cuota pendiente de la misma deuda
-      if (difference !== 0 && debt?.installments) {
-        const pendingInsts = debt.installments.filter((i: any) => i.status === 'pending' && i.id !== selectedInstallment.id);
-        if (pendingInsts.length > 0) {
-          // Obtener la cuota con el número más alto
-          const lastInst = pendingInsts.reduce((prev: any, curr: any) => (prev.installment_number > curr.installment_number) ? prev : curr);
-          const newLastAmount = Math.max(lastInst.amount - difference, 0); // Evitar cuotas negativas
-          
-          const { error: adjError } = await supabase.from('installments')
-            .update({ amount: newLastAmount })
-            .eq('id', lastInst.id);
-            
-          if (adjError) throw adjError;
-        }
-      }
-
-      setIsPayModalOpen(false);
-      setSelectedInstallment(null);
-      setPayAmount('');
-      setIsHistorical(false);
-      loadData();
-      void refreshData();
-    } catch (err) {
-      console.error(err);
-      alert('Error al pagar la cuota');
-    }
-  }
-
-  async function handleEditInstallment(e: React.FormEvent) {
-    e.preventDefault();
-    if (!selectedEditInst) return;
-
-    try {
-      const newAmount = parseFloat(editInstAmount);
-      const { error } = await supabase.from('installments')
-        .update({ amount: newAmount })
-        .eq('id', selectedEditInst.id);
-
-      if (error) throw error;
-
-      setIsEditInstModalOpen(false);
-      setSelectedEditInst(null);
-      loadData();
-    } catch (err) {
-      console.error(err);
-      alert('Error al editar la cuota');
-    }
-  }
-
-  async function handleDeleteDebt(debtId: string) {
-    if (!confirm('¿Estás seguro de que deseas eliminar esta deuda y todas sus cuotas?')) return;
-    try {
-      // Intentamos eliminar primero las cuotas (por si acaso no hay borrado en cascada)
-      await supabase.from('installments').delete().eq('debt_id', debtId);
-      const { error } = await supabase.from('debts').delete().eq('id', debtId);
-      
-      if (error) throw error;
-      loadData();
-    } catch (err) {
-      console.error(err);
-      alert('Error al eliminar la deuda');
-    }
-  }
-
-  const formatCurrency = (val: number) => `$${val.toLocaleString('es-CL')}`;
-
-  if (loading) return <div className={styles.loading}>Cargando deudas...</div>;
-
+function DebtCard({ item, today, onPay }: { item: DebtItem; today: string; onPay?: () => void }) {
+  const paidCount = item.totalCount - item.pendingCount;
   return (
-    <div className={styles.page}>
-      <header className={styles.header}>
-        <div>
-          <h1 className="h2">Deudas y Cuotas</h1>
-          <p className="text-secondary">Controla los préstamos y compras en cuotas del hogar.</p>
+    <div style={{ padding: '0.75rem 0', borderTop: '1px solid var(--border-color)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.6rem' }}>
+        <div className="row-main">
+          <div className="row-title">{item.debt.name}{item.debt.creditor ? ` · ${item.debt.creditor}` : ''}</div>
+          <div className="row-sub">{paidCount} de {item.totalCount} cuotas{item.endDate ? ` · termina ${monthYear(item.endDate)}` : ''}</div>
         </div>
-        <button className="btn-primary" onClick={() => setIsModalOpen(true)}>
-          <span>+</span> Nueva Deuda
-        </button>
-      </header>
-
-      <div className={styles.grid}>
-        {debts.length === 0 ? (
-          <div className={styles.emptyState}>No hay deudas registradas. ¡Excelente!</div>
-        ) : (
-          debts.map(debt => {
-            const paidAmount = debt.installments?.filter((i: any) => i.status === 'paid').reduce((acc: number, i: any) => acc + i.amount, 0) || 0;
-            const progress = (paidAmount / debt.total_amount) * 100;
-
-            return (
-              <div key={debt.id} className={`card ${styles.debtCard}`}>
-                <div className={styles.cardHeader}>
-                  <h3 className="h3">{debt.name}</h3>
-                  <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                    <div className={styles.total}>{formatCurrency(debt.total_amount)}</div>
-                    <button 
-                      onClick={() => handleDeleteDebt(debt.id)}
-                      style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', fontSize: '1.25rem', padding: '0.25rem' }}
-                      title="Eliminar deuda"
-                    >
-                      🗑️
-                    </button>
-                  </div>
-                </div>
-                
-                <div className={styles.progressContainer}>
-                  <div className={styles.progressLabels}>
-                    <span>Pagado: {formatCurrency(paidAmount)}</span>
-                    <span>Restante: {formatCurrency(debt.total_amount - paidAmount)}</span>
-                  </div>
-                  <div className={styles.progressBar}>
-                    <div className={styles.progressFill} style={{ width: `${progress}%` }}></div>
-                  </div>
-                </div>
-
-                <div className={styles.installmentsList}>
-                  <h4>Cuotas ({debt.installments?.length})</h4>
-                  {debt.installments?.sort((a: any, b: any) => a.installment_number - b.installment_number).map((inst: any) => (
-                    <div key={inst.id} className={`${styles.installment} ${inst.status === 'paid' ? styles.paid : ''}`}>
-                      <span>Cuota {inst.installment_number}</span>
-                      <div className={styles.instDetails}>
-                        <span>{formatCurrency(inst.amount)}</span>
-                        <span className={styles.instDate}>{formatDate(inst.due_date)}</span>
-                        {inst.status === 'pending' ? (
-                          <div style={{ display: 'flex', gap: '0.5rem' }}>
-                            <button 
-                              className={styles.payBtn}
-                              onClick={() => {
-                                setSelectedInstallment(inst);
-                                setPayAmount(inst.amount.toString());
-                                setIsPayModalOpen(true);
-                              }}
-                            >Pagar</button>
-                            <button 
-                              onClick={() => {
-                                setSelectedEditInst(inst);
-                                setEditInstAmount(inst.amount.toString());
-                                setIsEditInstModalOpen(true);
-                              }}
-                              style={{ background: 'none', border: '1px solid var(--border-color)', borderRadius: '4px', padding: '0.25rem 0.5rem', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '0.75rem' }}
-                            >Editar</button>
-                          </div>
-                        ) : (
-                          <span className={styles.paidBadge}>✓ Pagado</span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })
-        )}
+        <div className="row-end">{clp(item.remaining)}<small>{clp(item.monthly)} al mes</small></div>
       </div>
-
-      {isModalOpen && (
-        <div className={styles.modalOverlay}>
-          <div className={`card ${styles.modal}`}>
-            <h3 className="h3">Nueva Deuda</h3>
-            <form onSubmit={handleCreateDebt} className={styles.form}>
-              <div className="input-group">
-                <label className="input-label">Nombre / Motivo</label>
-                <input type="text" className="input-field" placeholder="Ej. Crédito Automotriz" value={name} onChange={e => setName(e.target.value)} required />
-              </div>
-              <div className="input-group">
-                <label className="input-label">Monto Total</label>
-                <input type="number" className="input-field" placeholder="0" value={totalAmount} onChange={e => setTotalAmount(e.target.value)} required />
-              </div>
-              <div className="input-group">
-                <label className="input-label">Número de Cuotas (Meses)</label>
-                <input type="number" className="input-field" min="1" value={installmentsCount} onChange={e => setInstallmentsCount(e.target.value)} required />
-              </div>
-              <div className={styles.modalActions}>
-                <button type="button" className="btn-secondary" onClick={() => setIsModalOpen(false)}>Cancelar</button>
-                <button type="submit" className="btn-primary">Guardar</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {isPayModalOpen && selectedInstallment && (
-        <div className={styles.modalOverlay}>
-          <div className={`card ${styles.modal}`}>
-            <h3 className="h3">Pagar Cuota {selectedInstallment.installment_number}</h3>
-            <p className="text-secondary" style={{fontSize: '0.875rem', marginTop: '-1rem', marginBottom: '1rem'}}>
-              Monto original: {formatCurrency(selectedInstallment.amount)}. Si pagas más o menos de este monto, la diferencia se descontará de la última cuota pendiente de la deuda.
-            </p>
-            <form onSubmit={handlePayInstallment} className={styles.form}>
-              
-              <div className="input-group" style={{ flexDirection: 'row', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                <input 
-                  type="checkbox" 
-                  id="isHistorical"
-                  checked={isHistorical}
-                  onChange={e => setIsHistorical(e.target.checked)}
-                  style={{ width: '1.2rem', height: '1.2rem', cursor: 'pointer' }}
-                />
-                <label htmlFor="isHistorical" className="input-label" style={{ margin: 0, cursor: 'pointer' }}>
-                  Solo marcar como pagada (pago histórico, no restar saldo)
-                </label>
-              </div>
-
-              <div className="input-group">
-                <label className="input-label">Monto real a pagar</label>
-                <input 
-                  type="number" 
-                  className="input-field" 
-                  value={payAmount} 
-                  onChange={e => setPayAmount(e.target.value)} 
-                  required 
-                />
-              </div>
-              
-              {!isHistorical && (
-                <div className="input-group">
-                  <label className="input-label">¿Desde qué cuenta quieres pagar?</label>
-                  <select className="input-field" value={payAccountId} onChange={e => setPayAccountId(e.target.value)} required>
-                    <option value="">Selecciona cuenta</option>
-                    {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.name}</option>)}
-                  </select>
-                </div>
-              )}
-
-              <div className={styles.modalActions}>
-                <button type="button" className="btn-secondary" onClick={() => setIsPayModalOpen(false)}>Cancelar</button>
-                <button type="submit" className="btn-primary">Confirmar Pago</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {isEditInstModalOpen && selectedEditInst && (
-        <div className={styles.modalOverlay}>
-          <div className={`card ${styles.modal}`}>
-            <h3 className="h3">Editar Cuota {selectedEditInst.installment_number}</h3>
-            <form onSubmit={handleEditInstallment} className={styles.form}>
-              <div className="input-group">
-                <label className="input-label">Nuevo monto planificado</label>
-                <input 
-                  type="number" 
-                  className="input-field" 
-                  value={editInstAmount} 
-                  onChange={e => setEditInstAmount(e.target.value)} 
-                  required 
-                />
-              </div>
-              <div className={styles.modalActions}>
-                <button type="button" className="btn-secondary" onClick={() => setIsEditInstModalOpen(false)}>Cancelar</button>
-                <button type="submit" className="btn-primary">Guardar</button>
-              </div>
-            </form>
-          </div>
+      <div style={{ margin: '0.45rem 0' }}><Meter value={item.paid} max={item.total} warnAt={2} /></div>
+      {item.next && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+          <span className="text-muted">
+            {item.overdue > 0
+              ? <span className="badge danger">{item.overdue} {item.overdue === 1 ? 'cuota atrasada' : 'cuotas atrasadas'}</span>
+              : `Próxima: ${shortDate(item.next.due_date)} (${dueLabel(daysBetween(today, item.next.due_date)).toLowerCase()})`}
+          </span>
+          {onPay && <button className="btn-secondary btn-small" onClick={onPay}>Registrar pago</button>}
         </div>
       )}
     </div>
   );
+}
+
+function NewDebtSheet({ data, onClose }: { data: Household; onClose: () => void }) {
+  const [name, setName] = useState('');
+  const [creditor, setCreditor] = useState('');
+  const [total, setTotal] = useState('');
+  const [count, setCount] = useState('1');
+  const [firstDue, setFirstDue] = useState(todayISO());
+  const [accountId, setAccountId] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const cards = data.accounts.filter(a => a.asset_kind === 'card' && !a.archived);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    const amount = Number(total.replace(/\D/g, ''));
+    const installments = Number(count);
+    if (!amount || installments < 1) { setError('Revisa el monto y las cuotas.'); return; }
+    setSaving(true);
+    setError(null);
+    const { data: debt, error: debtError } = await supabase
+      .from('debts')
+      .insert({
+        name: name.trim(),
+        creditor: creditor.trim() || null,
+        total_amount: amount,
+        user_id: data.userId,
+        kind: creditor.trim() ? 'family' : 'installments',
+        account_id: accountId || null,
+      })
+      .select('id')
+      .single();
+    if (debtError || !debt) { setSaving(false); setError('No se pudo guardar la deuda.'); return; }
+    const rows = splitInstallments(amount, installments).map((value, i) => ({
+      debt_id: debt.id,
+      installment_number: i + 1,
+      amount: value,
+      due_date: addMonths(firstDue, i),
+      status: 'pending',
+    }));
+    const { error: rowsError } = await supabase.from('installments').insert(rows);
+    setSaving(false);
+    if (rowsError) {
+      await supabase.from('debts').delete().eq('id', debt.id);
+      setError('No se pudieron crear las cuotas.');
+      return;
+    }
+    void refreshData();
+    onClose();
+  }
+
+  return (
+    <Sheet title="Nueva deuda" onClose={onClose}>
+      <form className="form-stack" onSubmit={e => void submit(e)}>
+        <div className="input-group"><label className="input-label" htmlFor="d-name">Nombre</label><input id="d-name" className="input-field" value={name} onChange={e => setName(e.target.value)} required /></div>
+        <div className="input-group"><label className="input-label" htmlFor="d-creditor">A quién se le debe (si es una persona)</label><input id="d-creditor" className="input-field" value={creditor} onChange={e => setCreditor(e.target.value)} /></div>
+        <div className="form-row">
+          <div className="input-group"><label className="input-label" htmlFor="d-total">Total pendiente</label><input id="d-total" className="input-field" inputMode="numeric" value={total} onChange={e => setTotal(e.target.value)} required /></div>
+          <div className="input-group"><label className="input-label" htmlFor="d-count">Cuotas</label><input id="d-count" className="input-field" type="number" min="1" value={count} onChange={e => setCount(e.target.value)} required /></div>
+        </div>
+        <div className="input-group"><label className="input-label" htmlFor="d-first">Primera cuota</label><input id="d-first" className="input-field" type="date" value={firstDue} onChange={e => setFirstDue(e.target.value)} required /></div>
+        <div className="input-group">
+          <label className="input-label" htmlFor="d-card">¿Se cobra en una tarjeta?</label>
+          <select id="d-card" className="input-field" value={accountId} onChange={e => setAccountId(e.target.value)}>
+            <option value="">No</option>
+            {cards.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+        {error && <div className="notice danger" role="alert">{error}</div>}
+        <button className="btn-primary btn-block" disabled={saving}>{saving ? 'Guardando…' : 'Guardar deuda'}</button>
+      </form>
+    </Sheet>
+  );
+}
+
+function Debts({ data }: { data: Household }) {
+  const today = todayISO();
+  const overview = useMemo(() => debtOverview(data, today), [data, today]);
+  const [extra, setExtra] = useState(Number(data.settings.extra_debt_payment) || 0);
+  const [order, setOrder] = useState<PayoffOrder>('smallest');
+  const [paying, setPaying] = useState<UpcomingPayment | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const simulation = useMemo(() => simulatePayoff(overview.payable, extra, order), [overview.payable, extra, order]);
+  const finishDate = (months: number) => monthYear(addMonths(today, months));
+  const paid = overview.payable.reduce((s, i) => s + i.paid, 0);
+  const planned = overview.payable.reduce((s, i) => s + i.total, 0);
+
+  async function saveExtra() {
+    await supabase.from('household_settings').update({ extra_debt_payment: extra }).eq('id', true);
+    setSaved(true);
+    void refreshData();
+  }
+
+  return (
+    <div className="page">
+      <div className="page-head">
+        <h1 className="h1">Deudas</h1>
+        <button className="btn-primary btn-small" onClick={() => setAdding(true)}><Icon name="plus" size={16} />Nueva</button>
+      </div>
+
+      <section className="card hero">
+        <div className="hero-label">Deben en total</div>
+        <div className="hero-value">{clp(overview.total)}</div>
+        <div className="hero-sub">{clp(overview.monthlyInstallments)} al mes en cuotas</div>
+        <Meter value={paid} max={planned} warnAt={2} />
+        <div className="hero-foot"><span>Cuotas pagadas {clp(paid)}</span><span>de {clp(planned)}</span></div>
+      </section>
+
+      <div className="columns">
+        <div className="stack">
+          {overview.cards.map(card => (
+            <section className="card" key={card.account.id}>
+              <div className="card-head" style={{ marginBottom: '0.3rem' }}>
+                <h2 className="h3">{card.account.name}</h2>
+                <span className="num" style={{ fontWeight: 680 }}>{clp(card.owed)}</span>
+              </div>
+              {card.statement && (
+                <p className="text-muted">
+                  {card.statement.paid_at
+                    ? `Último estado pagado (${shortDate(card.statement.due_date)})`
+                    : `Facturado ${clp(Number(card.statement.billed_amount))}, vence ${shortDate(card.statement.due_date)}`}
+                  {card.statement.cae ? ` · CAE ${String(card.statement.cae).replace('.', ',')}%` : ''}
+                </p>
+              )}
+              {card.plans.map(item => <DebtCard key={item.debt.id} item={item} today={today} />)}
+            </section>
+          ))}
+
+          <section className="card">
+            <h2 className="h3" style={{ marginBottom: '0.4rem' }}>Créditos y personas</h2>
+            {overview.standalone.length === 0 && <p className="text-muted">No hay deudas fuera de las tarjetas.</p>}
+            {overview.standalone.map(item => {
+              const payment = toPayment(item, today);
+              return <DebtCard key={item.debt.id} item={item} today={today} onPay={payment ? () => setPaying(payment) : undefined} />;
+            })}
+          </section>
+        </div>
+
+        <section className="card">
+          <h2 className="h3">¿Y si abonan más?</h2>
+          <p className="text-muted" style={{ margin: '0.2rem 0 0.8rem' }}>Simula cuándo terminarían sus cuotas. No incluye el ahorro de intereses ni es asesoría financiera.</p>
+          <label className="input-label" htmlFor="extra">Abono extra al mes: <strong className="num">{clp(extra)}</strong></label>
+          <input id="extra" type="range" min="0" max="500000" step="10000" value={extra} onChange={e => { setExtra(Number(e.target.value)); setSaved(false); }} style={{ width: '100%', accentColor: 'var(--accent-color)', margin: '0.4rem 0 0.7rem' }} />
+          <div className="segmented" style={{ marginBottom: '0.8rem' }}>
+            <button className={order === 'smallest' ? 'active' : ''} onClick={() => setOrder('smallest')}>Menor saldo primero</button>
+            <button className={order === 'rate' ? 'active' : ''} onClick={() => setOrder('rate')}>Mayor tasa primero</button>
+          </div>
+          <div className="tiles">
+            <div><div className="tile-label">Sin abono</div><div className="tile-value">{finishDate(simulation.baseline)}</div><div className="tile-sub">{monthsLabel(simulation.baseline)}</div></div>
+            <div><div className="tile-label">Con abono</div><div className="tile-value">{finishDate(simulation.withExtra)}</div><div className="tile-sub">{simulation.saved > 0 ? `${monthsLabel(simulation.saved)} antes` : 'Sin cambio'}</div></div>
+          </div>
+          <button className="btn-secondary btn-block" style={{ marginTop: '0.9rem' }} onClick={() => void saveExtra()} disabled={saved || extra === Number(data.settings.extra_debt_payment)}>
+            {saved ? 'Incluido en el plan' : 'Incluir este abono en el plan mensual'}
+          </button>
+        </section>
+      </div>
+
+      {paying && <PaySheet data={data} payment={paying} onClose={() => setPaying(null)} />}
+      {adding && <NewDebtSheet data={data} onClose={() => setAdding(false)} />}
+    </div>
+  );
+}
+
+export default function DebtsPage() {
+  return <WithData>{data => <Debts data={data} />}</WithData>;
 }

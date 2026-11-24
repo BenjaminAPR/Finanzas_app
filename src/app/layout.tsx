@@ -1,27 +1,19 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
+import type { Metadata, Viewport } from 'next';
+import { Geist } from 'next/font/google';
+import './globals.css';
 
 const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
+  variable: '--font-geist-sans',
+  subsets: ['latin'],
 });
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
-import type { Viewport } from "next";
 
 export const metadata: Metadata = {
-  title: "Finanzas Hogar",
-  description: "Gestión de finanzas personales",
-  manifest: "/manifest.json",
+  title: 'Finanzas Hogar',
+  description: 'Las cuentas de la casa, claras y en un solo lugar',
   appleWebApp: {
     capable: true,
-    statusBarStyle: "default",
-    title: "Finanzas",
+    statusBarStyle: 'default',
+    title: 'Finanzas',
   },
   formatDetection: {
     telephone: false,
@@ -29,21 +21,18 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#ffffff",
-  width: "device-width",
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#f5f3ee' },
+    { media: '(prefers-color-scheme: dark)', color: '#111512' },
+  ],
+  width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
-  viewportFit: "cover",
+  viewportFit: 'cover',
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
+    <html lang="es-CL" className={geistSans.variable}>
       <body>{children}</body>
     </html>
   );
