@@ -63,13 +63,21 @@ function occurrence(item: RecurringItem, cycle: Cycle): string {
 function findRecurringPayment(item: RecurringItem, cycle: Cycle, transactions: Transaction[]) {
   const name = normalize(item.name);
   const type = item.kind === 'income' ? 'income' : 'expense';
-  return transactions.find(t => {
+  const expected = Number(item.amount);
+  return transactions.filter(t => {
     if (t.type !== type || isMarker(t)) return false;
     const day = dayOf(t);
     if (day < cycle.start || day > cycle.end) return false;
-    return t.recurring_id === item.id || (!t.recurring_id && normalize(t.description ?? '').includes(name));
+    if (t.recurring_id) return t.recurring_id === item.id;
+    const text = normalize(t.description ?? '');
+    if (text.includes(name)) return true;
+    // Las cartolas describen el sueldo de forma genérica ("Pago de sueldos").
+    return item.kind === 'income' && name.includes('sueldo') && /sueldo|remuneracion/.test(text) &&
+      Math.abs(Number(t.amount) - expected) <= expected * 0.25;
   });
 }
+
+const totalOf = (payments: Transaction[]) => payments.reduce((s, t) => s + Number(t.amount), 0);
 
 export type UpcomingPayment = {
   key: string;
@@ -96,14 +104,14 @@ export function buildPlan(data: Household, today: string) {
   const recurringPayments = new Set<string>();
 
   const income = active.filter(r => r.kind === 'income').map(item => {
-    const payment = findRecurringPayment(item, cycle, transactions);
-    if (payment) recurringPayments.add(payment.id);
-    return { item, date: occurrence(item, cycle), received: !!payment, amount: payment ? Number(payment.amount) : Number(item.amount) };
+    const payments = findRecurringPayment(item, cycle, transactions);
+    payments.forEach(p => recurringPayments.add(p.id));
+    return { item, date: occurrence(item, cycle), received: payments.length > 0, amount: payments.length ? totalOf(payments) : Number(item.amount) };
   });
   const fixed = active.filter(r => r.kind === 'expense').map(item => {
-    const payment = findRecurringPayment(item, cycle, transactions);
-    if (payment) recurringPayments.add(payment.id);
-    return { item, date: occurrence(item, cycle), paid: !!payment, amount: payment ? Number(payment.amount) : Number(item.amount) };
+    const payments = findRecurringPayment(item, cycle, transactions);
+    payments.forEach(p => recurringPayments.add(p.id));
+    return { item, date: occurrence(item, cycle), paid: payments.length > 0, amount: payments.length ? totalOf(payments) : Number(item.amount) };
   });
 
   const cycleInstallments = data.installments.filter(i => i.due_date >= cycle.start && i.due_date <= cycle.end);

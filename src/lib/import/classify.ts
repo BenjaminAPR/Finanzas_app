@@ -150,5 +150,20 @@ export function buildImport(
     }
     result.push(item);
   }
+
+  // Una compra anulada y su devolución se cancelan: no son gasto ni ingreso.
+  for (const refund of result) {
+    if (refund.amount <= 0 || refund.decision !== 'new' || refund.kind !== 'movement') continue;
+    const purchase = result.find(r =>
+      r.decision === 'new' && r.accountId === refund.accountId && r.merchant === refund.merchant &&
+      r.amount === -refund.amount && r.date <= refund.date,
+    );
+    if (!purchase) continue;
+    refund.decision = 'internal';
+    refund.reason = 'Compra anulada';
+    purchase.decision = 'internal';
+    purchase.reason = 'Compra anulada';
+  }
+
   return result.sort((a, b) => b.date.localeCompare(a.date));
 }
