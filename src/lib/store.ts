@@ -11,6 +11,8 @@ import type {
   Household,
   HouseholdSettings,
   Installment,
+  Period,
+  PeriodBudget,
   RecurringItem,
   Transaction,
 } from './finance';
@@ -55,7 +57,7 @@ async function load(gen: number) {
       if (gen === generation) setState({ data: null, loading: false, error: null, fetchedAt: 0 });
       return;
     }
-    const [accounts, budgets, profiles, debts, installments, statements, recurring, rules, settings, transactions] =
+    const [accounts, budgets, profiles, debts, installments, statements, recurring, rules, settings, periods, periodBudgets, transactions] =
       await Promise.all([
         supabase.from('accounts').select('*').order('created_at'),
         supabase.from('budgets').select('id,name,amount,account_id,user_id').order('name'),
@@ -66,11 +68,13 @@ async function load(gen: number) {
         supabase.from('recurring_items').select('*').order('day_of_month'),
         supabase.from('category_rules').select('id,pattern,budget_id,treat_as'),
         supabase.from('household_settings').select('cycle_start_day,own_names,extra_debt_payment').maybeSingle(),
+        supabase.from('periods').select('id,start_date,end_date').order('start_date'),
+        supabase.from('period_budgets').select('id,period_id,budget_id,amount'),
         fetchAllTransactions(),
       ]);
     const failed =
       accounts.error || budgets.error || profiles.error || debts.error || installments.error ||
-      statements.error || recurring.error || rules.error || settings.error;
+      statements.error || recurring.error || rules.error || settings.error || periods.error || periodBudgets.error;
     if (failed) throw failed;
     if (gen !== generation) return; // llegó una recarga más nueva o se cerró sesión
     setState({
@@ -85,6 +89,8 @@ async function load(gen: number) {
         recurring: (recurring.data ?? []) as RecurringItem[],
         rules: (rules.data ?? []) as CategoryRule[],
         settings: (settings.data as HouseholdSettings | null) ?? DEFAULT_SETTINGS,
+        periods: (periods.data ?? []) as Period[],
+        periodBudgets: (periodBudgets.data ?? []) as PeriodBudget[],
         transactions,
       },
       loading: false,

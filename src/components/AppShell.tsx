@@ -13,7 +13,7 @@ const PRIMARY = [
   { label: 'Billetera', path: '/dashboard', icon: 'wallet' },
   { label: 'Movimientos', path: '/transactions', icon: 'list' },
   { label: 'Deudas', path: '/debts', icon: 'debt' },
-  { label: 'El mes', path: '/plan', icon: 'home' },
+  { label: 'Presupuesto', path: '/plan', icon: 'budget' },
 ];
 const SECONDARY = [
   { label: 'Análisis', path: '/reports', icon: 'chart' },

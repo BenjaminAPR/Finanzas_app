@@ -2,8 +2,8 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Nido · Finanzas del hogar',
-    short_name: 'Nido',
+    name: 'Cuentas Claras · Finanzas del hogar',
+    short_name: 'Cuentas Claras',
     description: 'Las cuentas de la casa, en orden y entre los dos.',
     lang: 'es-CL',
     start_url: '/dashboard',

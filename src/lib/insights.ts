@@ -1,6 +1,7 @@
 // Vistas hacia adelante: saldo día a día, cuotas por mes y avisos. Sin dependencias de React.
 import { dayOf, isAdjustment, isMarker, type Household } from './finance.ts';
 import { buildPlan, cycleHistory } from './plan.ts';
+import { daysBetween, periodView } from './period.ts';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const toISO = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -76,23 +77,28 @@ export function insights(data: Household, today: string): Insight[] {
   const plan = buildPlan(data, today);
   const list: Insight[] = [];
 
-  const projection = projectCash(data, today);
-  if (projection.low.balance < 0) {
+  const view = periodView(data, today);
+  if (view?.low && view.low.balance < 0) {
     list.push({
       tone: 'danger',
-      text: `El ${parse(projection.low.date).toLocaleDateString('es-CL', { day: 'numeric', month: 'short' }).replace('.', '')} sus cuentas quedarían en ${clp(projection.low.balance)} si no entra más plata antes.`,
+      text: `El ${parse(view.low.date).toLocaleDateString('es-CL', { day: 'numeric', month: 'short' }).replace('.', '')} sus cuentas quedarían en ${clp(view.low.balance)} si gastan todo lo presupuestado.`,
+      href: '/plan',
     });
   }
 
-  const cycleDays = Math.round((parse(plan.cycle.end).getTime() - parse(plan.cycle.start).getTime()) / 86_400_000) + 1;
-  const elapsed = cycleDays - plan.cycle.daysLeft + 1;
-  if (plan.available > 0 && elapsed >= 4) {
-    const expected = (plan.available * elapsed) / cycleDays;
-    const ratio = plan.spent / expected;
-    if (ratio > 1.15) {
-      list.push({ tone: 'warn', text: `Van gastando más rápido de lo planeado: ${clp(plan.spent)} cuando a esta altura lo esperable era ${clp(expected)}.`, href: '/transactions' });
-    } else if (ratio < 0.85) {
-      list.push({ tone: 'ok', text: `Van bien: llevan ${clp(plan.spent)} gastado, menos de lo esperable a esta altura del ciclo.` });
+  if (view && view.totalBudget > 0 && today <= view.period.end_date) {
+    const elapsed = daysBetween(view.period.start_date, today) + 1;
+    if (elapsed >= 4) {
+      const expected = (view.totalBudget * elapsed) / view.totalDays;
+      const ratio = view.totalSpent / expected;
+      const over = view.budgets.filter(b => b.over > 0);
+      if (over.length) {
+        list.push({ tone: 'warn', text: `Se pasaron en ${over.map(b => b.name).join(', ')}.`, href: '/plan' });
+      } else if (ratio > 1.15) {
+        list.push({ tone: 'warn', text: `Van gastando más rápido que el presupuesto: ${clp(view.totalSpent)} cuando a esta altura lo esperable era ${clp(expected)}.`, href: '/plan' });
+      } else if (ratio < 0.85) {
+        list.push({ tone: 'ok', text: `Van bien: llevan ${clp(view.totalSpent)} de ${clp(view.totalBudget)} presupuestados.` });
+      }
     }
   }
 

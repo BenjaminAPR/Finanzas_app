@@ -15,13 +15,13 @@ const fraunces = Fraunces({
 });
 
 export const metadata: Metadata = {
-  title: 'Nido · Finanzas del hogar',
+  title: 'Cuentas Claras · Finanzas del hogar',
   description: 'Las cuentas de la casa, en orden y entre los dos.',
-  applicationName: 'Nido',
+  applicationName: 'Cuentas Claras',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Nido',
+    title: 'Cuentas Claras',
   },
   formatDetection: {
     telephone: false,

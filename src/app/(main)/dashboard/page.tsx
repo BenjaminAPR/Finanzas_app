@@ -11,6 +11,7 @@ import { clp, dueLabel, monthYear } from '@/lib/format';
 import type { AssetKind, Household } from '@/lib/finance';
 import { buildPlan, type UpcomingPayment } from '@/lib/plan';
 import { walletSummary } from '@/lib/wallet';
+import { periodView } from '@/lib/period';
 
 const GROUPS: { kind: AssetKind; title: string; total: 'cash' | 'savings' | 'investments' | 'cardDebt' }[] = [
   { kind: 'cash', title: 'Cuentas', total: 'cash' },
@@ -23,6 +24,7 @@ function Wallet({ data }: { data: Household }) {
   const today = todayISO();
   const wallet = useMemo(() => walletSummary(data, today), [data, today]);
   const plan = useMemo(() => buildPlan(data, today), [data, today]);
+  const period = useMemo(() => periodView(data, today), [data, today]);
   const [adding, setAdding] = useState(false);
   const [paying, setPaying] = useState<UpcomingPayment | null>(null);
   const urgent = plan.upcoming.filter(u => !u.flexible && u.daysUntil <= 3);
@@ -88,7 +90,7 @@ function Wallet({ data }: { data: Household }) {
       <div className="wallet-actions">
         <button className="btn-secondary" onClick={() => setAdding(true)}><Icon name="plus" size={16} />Agregar cuenta, DAP o tarjeta</button>
         <Link className="btn-secondary" href="/import"><Icon name="upload" size={16} />Actualizar con cartolas</Link>
-        <Link className="btn-secondary" href="/plan"><Icon name="chart" size={16} />Libre este mes: {clp(plan.free)}</Link>
+        <Link className="btn-secondary" href="/plan"><Icon name="budget" size={16} />{period ? `Libre en el período: ${clp(period.free)}` : 'Armar presupuesto'}</Link>
       </div>
 
       {adding && <NewAccountSheet data={data} onClose={() => setAdding(false)} />}

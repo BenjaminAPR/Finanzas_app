@@ -98,6 +98,10 @@ export type CategoryRule = {
   treat_as: 'expense' | 'internal' | 'ignore';
 };
 
+export type Period = { id: string; start_date: string; end_date: string };
+
+export type PeriodBudget = { id: string; period_id: string; budget_id: string; amount: number };
+
 export type HouseholdSettings = {
   cycle_start_day: number;
   own_names: string[];
@@ -116,6 +120,8 @@ export type Household = {
   recurring: RecurringItem[];
   rules: CategoryRule[];
   settings: HouseholdSettings;
+  periods: Period[];
+  periodBudgets: PeriodBudget[];
 };
 
 const CLOSE_MARKER = '🔄 Cierre de Mes';
