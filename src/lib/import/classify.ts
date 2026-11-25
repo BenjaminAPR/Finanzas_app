@@ -1,4 +1,4 @@
-import { normalize, type Account, type CategoryRule, type Transaction } from '../finance.ts';
+import { normalize, type Account, type CategoryRule, type Household } from '../finance.ts';
 import type { ParsedRow, ParsedStatement } from './parse.ts';
 
 export type RowDecision = 'new' | 'review' | 'existing' | 'internal' | 'plan';
@@ -11,7 +11,14 @@ export type ImportRow = ParsedRow & {
   budgetName: string | null;
   budgetId: string | null;
   merchant: string;
+  recurringId?: string;
+  installmentId?: string;
 };
+
+export type ImportContext = Pick<
+  Household,
+  'accounts' | 'budgets' | 'rules' | 'settings' | 'transactions' | 'recurring' | 'debts' | 'installments' | 'statements'
+>;
 
 // Palabras generales de comercios. Los nombres de personas viven en la base, nunca en el código.
 const MERCHANT_CATEGORIES: [RegExp, string][] = [
@@ -22,16 +29,32 @@ const MERCHANT_CATEGORIES: [RegExp, string][] = [
   [/spotify|netflix|apple com|google|youtube|disney|hbo|prime video|anthropic/, 'Suscripciones'],
   [/entel|movistar|wom|claro|aguas|enel|metrogas|gasco|lipigas|vtr|mundo/, 'Casa'],
   [/cineplanet|cinemark|cinehoyts/, 'Citas'],
-  [/h m|hym|zara|falabella|paris|ripley|shein|bbw|perfum|barberia|decohogar|easy|sodimac|homecenter/, 'Compras'],
+  [/h m|hym|zara|falabella|paris|ripley|shein|bbw|perfum|barberia|decohogar|easy|sodimac|homecenter|americanino/, 'Compras'],
 ];
 
-const INVESTMENT_OR_DEPOSIT = /dep a plazo|deposito a plazo|cobro de deposito|racional|vector cl/;
+const INVESTMENT_OR_DEPOSIT = /dep a plazo|deposito a plazo|cobro de deposito|captaciones|racional|vector cl/;
 const CARD_PAYMENT = /pago tarjeta/;
 const CASH = /giro cajero/;
 const SALARY = /de sueldos|remuneracion/;
 const OWN_ACCOUNT_TRANSFER = /^traspaso (a|de) cuenta/;
 const PERSON_TRANSFER = /^(traspaso (a|de)|transf(\.| ) ?(de|para))/;
-const BILL_COLLECTION = /recaudacion y pagos/;
+const BILL_COLLECTION = /recaudacion y pagos|servipag/;
+
+/** Identifica el origen aunque el archivo no traiga número de cuenta (por ejemplo, algunos Excel). */
+export const statementKey = (s: ParsedStatement) => s.accountRef || `inst:${s.institution}`;
+
+export function resolveAccount(s: ParsedStatement, accounts: Account[], mapping: Record<string, string>): string | null {
+  const key = statementKey(s);
+  if (mapping[key]) return mapping[key];
+  if (s.accountRef) return accounts.find(a => a.statement_ref === s.accountRef)?.id ?? null;
+  const candidates = accounts.filter(a =>
+    !a.archived && a.institution === s.institution &&
+    (s.accountKind === 'card' ? a.asset_kind === 'card' : a.asset_kind !== 'card' && a.asset_kind !== 'investment'),
+  );
+  if (candidates.length === 1) return candidates[0].id;
+  const withStatements = candidates.filter(a => a.statement_ref);
+  return withStatements.length === 1 ? withStatements[0].id : null;
+}
 
 function merchantOf(description: string): string {
   return normalize(description)
@@ -83,19 +106,20 @@ function classifyText(
 }
 
 const dayDistance = (a: string, b: string) => Math.abs(Date.parse(a) - Date.parse(b)) / 86_400_000;
-const MATCH_WINDOW_DAYS = 7;
+// Lo anotado a mano suele quedar unos días corrido; entre archivos del banco la fecha varía menos.
+const MANUAL_WINDOW_DAYS = 7;
+const IMPORTED_WINDOW_DAYS = 3;
+const tokens = (...values: (string | null | undefined)[]) =>
+  values.filter(Boolean).map(v => normalize(v!)).filter(t => t.length >= 4);
+const near = (value: number, expected: number, tolerance: number) =>
+  expected > 0 && Math.abs(value - expected) <= expected * tolerance;
 
 export function buildImport(
   statements: ParsedStatement[],
-  accounts: Account[],
-  budgets: { id: string; name: string }[],
-  rules: CategoryRule[],
-  ownNames: string[],
-  existing: Transaction[],
+  data: ImportContext,
   mapping: Record<string, string> = {},
 ): ImportRow[] {
-  const accountFor = (s: ParsedStatement) =>
-    mapping[s.accountRef] ?? accounts.find(a => a.statement_ref === s.accountRef)?.id ?? null;
+  const existing = data.transactions;
   const cardPaymentAmounts = new Set(
     statements.flatMap(s => s.rows.filter(r => r.kind === 'card_payment').map(r => Math.abs(r.amount))),
   );
@@ -105,7 +129,7 @@ export function buildImport(
   for (const statement of statements) {
     const seen = new Map<string, number>();
     for (const row of statement.rows) {
-      const base = `${statement.accountRef}|${row.date}|${row.amount}|${normalize(row.description)}`;
+      const base = `${statementKey(statement)}|${row.date}|${row.amount}|${normalize(row.description)}`;
       const occurrence = (seen.get(base) ?? 0) + 1;
       seen.set(base, occurrence);
       const key = `${base}|${occurrence}`;
@@ -115,28 +139,67 @@ export function buildImport(
 
   const hashes = new Set(existing.map(t => t.import_hash).filter(Boolean));
   const consumed = new Set<string>();
+  const debtById = new Map(data.debts.map(d => [d.id, d]));
+  const pendingInstallments = data.installments
+    .filter(i => i.status === 'pending' && !debtById.get(i.debt_id)?.account_id)
+    .sort((a, b) => a.due_date.localeCompare(b.due_date));
+  const linkedInstallments = new Set<string>();
 
   const result: ImportRow[] = [];
   for (const [key, { row, statement }] of unique) {
-    const accountId = accountFor(statement);
-    const classified = classifyText(row, ownNames, rules, cardPaymentAmounts);
+    const accountId = resolveAccount(statement, data.accounts, mapping);
+    const classified = classifyText(row, data.settings.own_names, data.rules, cardPaymentAmounts);
     const { ruleBudgetId, ...decision } = classified;
-    const budgetId = ruleBudgetId ?? budgets.find(b => normalize(b.name) === normalize(decision.budgetName ?? ''))?.id ?? null;
+    const budgetId = ruleBudgetId ?? data.budgets.find(b => normalize(b.name) === normalize(decision.budgetName ?? ''))?.id ?? null;
     const item: ImportRow = { ...row, key, accountId, ...decision, budgetId };
+    const text = normalize(row.description);
+    const open = item.decision === 'new' || item.decision === 'review';
 
     if (hashes.has(key)) {
       item.decision = 'existing';
       item.reason = 'Ya importado';
-    } else if ((item.decision === 'new' || item.decision === 'review') && accountId) {
+    } else if (open && row.amount < 0) {
+      const amount = -row.amount;
+      const statementPaid = data.statements.find(s =>
+        !s.paid_at && Number(s.billed_amount) - Number(s.paid_amount) === amount &&
+        row.date > s.period_end && (row.date <= s.due_date || dayDistance(row.date, s.due_date) <= 10),
+      );
+      const installment = pendingInstallments.find(i => {
+        const debt = debtById.get(i.debt_id)!;
+        return !linkedInstallments.has(i.id) && near(amount, Number(i.amount), 0.01) &&
+          tokens(debt.match_text, debt.creditor, debt.name).some(t => text.includes(t));
+      });
+      const recurring = data.recurring.find(r =>
+        r.active && r.kind === 'expense' && near(amount, Number(r.amount), 0.2) &&
+        tokens(r.match_text, r.name).some(t => text.includes(t)),
+      );
+      if (statementPaid) {
+        item.decision = 'internal';
+        item.reason = 'Pago de tarjeta';
+      } else if (installment) {
+        const debt = debtById.get(installment.debt_id)!;
+        linkedInstallments.add(installment.id);
+        item.decision = 'new';
+        item.reason = `Cuota ${installment.installment_number} de ${debt.name}`;
+        item.installmentId = installment.id;
+      } else if (recurring) {
+        item.decision = 'new';
+        item.reason = recurring.name;
+        item.recurringId = recurring.id;
+        item.budgetId = recurring.budget_id ?? item.budgetId;
+      }
+    }
+
+    if ((item.decision === 'new' || item.decision === 'review') && accountId) {
       const type = row.amount > 0 ? 'income' : 'expense';
       const candidates = existing
         .filter(t =>
           !consumed.has(t.id) &&
-          !t.import_hash &&
           Number(t.amount) === Math.abs(row.amount) &&
           (t.type === type || t.type === 'transfer') &&
           (t.account_id === accountId || t.destination_account_id === accountId) &&
-          dayDistance((t.date || t.created_at).slice(0, 10), row.date) <= MATCH_WINDOW_DAYS,
+          dayDistance((t.date || t.created_at).slice(0, 10), row.date) <=
+            (t.import_hash ? IMPORTED_WINDOW_DAYS : MANUAL_WINDOW_DAYS),
         )
         .sort((a, b) =>
           dayDistance((a.date || a.created_at).slice(0, 10), row.date) -
@@ -146,6 +209,9 @@ export function buildImport(
         consumed.add(candidates[0].id);
         item.decision = 'existing';
         item.reason = `Ya registrado como "${candidates[0].description}"`;
+        if (item.installmentId) linkedInstallments.delete(item.installmentId);
+        delete item.installmentId;
+        delete item.recurringId;
       }
     }
     result.push(item);

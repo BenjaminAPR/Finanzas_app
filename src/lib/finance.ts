@@ -49,6 +49,7 @@ export type Debt = {
   account_id?: string | null;
   monthly_rate?: number | null;
   cae?: number | null;
+  match_text?: string | null;
 };
 
 export type Installment = {
@@ -86,6 +87,7 @@ export type RecurringItem = {
   account_id: string | null;
   owner_label: string | null;
   active: boolean;
+  match_text?: string | null;
 };
 
 export type CategoryRule = {
