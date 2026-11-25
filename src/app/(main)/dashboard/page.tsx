@@ -8,6 +8,8 @@ import { todayISO } from '@/lib/dates';
 import { clp, dueLabel, shortDate } from '@/lib/format';
 import { dayOf, type Household } from '@/lib/finance';
 import { buildPlan, debtOverview, type UpcomingPayment } from '@/lib/plan';
+import { insights, projectCash } from '@/lib/insights';
+import { CashflowChart } from '@/components/charts';
 
 function Dashboard({ data }: { data: Household }) {
   const today = todayISO();
@@ -16,6 +18,8 @@ function Dashboard({ data }: { data: Household }) {
   const [paying, setPaying] = useState<UpcomingPayment | null>(null);
 
   const urgent = plan.upcoming.filter(u => u.daysUntil <= 2);
+  const projection = useMemo(() => projectCash(data, today), [data, today]);
+  const notes = useMemo(() => insights(data, today), [data, today]);
   const lastImport = data.transactions.filter(t => t.source === 'import').map(dayOf).sort().at(-1);
   const hasPlan = plan.incomeTotal > 0;
   const maxCategory = plan.categories[0]?.total ?? 0;
@@ -52,8 +56,25 @@ function Dashboard({ data }: { data: Household }) {
       ))}
 
 
+      {notes.length > 0 && (
+        <div className="insights" aria-label="Avisos">
+          {notes.map(n => n.href
+            ? <Link key={n.text} href={n.href} className={`insight ${n.tone}`}>{n.text}</Link>
+            : <div key={n.text} className={`insight ${n.tone}`}>{n.text}</div>)}
+        </div>
+      )}
+
       <div className="columns">
         <div className="stack">
+          <section className="card">
+            <div className="card-head">
+              <h2 className="h3">Cómo viene la plata</h2>
+              <span className="text-muted">Al {shortDate(projection.end.date)}: {clp(projection.end.balance)}</span>
+            </div>
+            <CashflowChart points={projection.points} low={projection.low} />
+            <div className="chart-legend"><span><i className="in" />Entra plata</span><span><i />Pagos</span><span>Toca el gráfico para ver cada día</span></div>
+          </section>
+
           <section className="card">
             <div className="card-head"><h2 className="h3">Próximos pagos</h2><span className="text-muted">{clp(plan.dueInCycle)} este ciclo</span></div>
             <div className="list">
