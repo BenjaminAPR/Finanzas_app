@@ -203,7 +203,26 @@ export function buildPlan(data: Household, today: string) {
   const dueInCycle = upcoming.filter(u => u.date <= cycle.end).reduce((s, u) => s + u.amount, 0);
   const cashAfterPayments = wealth.cash + incomePending - dueInCycle;
 
+  // Lo libre parte de la plata real: lo que hay hoy más lo que falta recibir, menos todo
+  // lo que ya está comprometido hasta fin de ciclo, incluidas las compras con tarjeta.
+  const fixedPending = fixed.filter(f => !f.paid).reduce((s, f) => s + f.amount, 0);
+  const debtsDue = data.installments
+    .filter(i => i.status === 'pending' && i.due_date <= cycle.end && !debtById.get(i.debt_id)?.account_id)
+    .reduce((s, i) => s + Number(i.amount), 0);
+  const cardsSpent = wealth.items
+    .filter(a => a.asset_kind === 'card')
+    .reduce((sum, card) => {
+      const laterPlans = data.installments
+        .filter(i => i.status === 'pending' && i.due_date > cycle.end && debtById.get(i.debt_id)?.account_id === card.id)
+        .reduce((s, i) => s + Number(i.amount), 0);
+      return sum + Math.max(0, Math.max(0, -card.balance) - laterPlans);
+    }, 0);
+  const free = Math.round(wealth.cash + incomePending - fixedPending - debtsDue - cardsSpent - extraDebt);
+
   return {
+    free,
+    freeParts: { cash: wealth.cash, incomePending, fixedPending, debtsDue, cardsSpent, extraDebt },
+    perDayFree: cycle.daysLeft > 0 ? Math.max(0, free) / cycle.daysLeft : 0,
     cycle,
     income,
     fixed,
