@@ -10,10 +10,10 @@ import { Logo } from './Logo';
 import { TransactionSheet } from './TransactionSheet';
 
 const PRIMARY = [
-  { label: 'Inicio', path: '/dashboard', icon: 'home' },
+  { label: 'Billetera', path: '/dashboard', icon: 'wallet' },
   { label: 'Movimientos', path: '/transactions', icon: 'list' },
   { label: 'Deudas', path: '/debts', icon: 'debt' },
-  { label: 'Patrimonio', path: '/accounts', icon: 'wealth' },
+  { label: 'El mes', path: '/plan', icon: 'home' },
 ];
 const SECONDARY = [
   { label: 'Análisis', path: '/reports', icon: 'chart' },
@@ -45,7 +45,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     router.push('/login');
   };
 
-  const isActive = (path: string) => pathname === path || pathname.startsWith(`${path}/`);
+  const isActive = (path: string) =>
+    pathname === path || pathname.startsWith(`${path}/`) || (path === '/dashboard' && pathname.startsWith('/accounts'));
   const navLink = (item: { label: string; path: string; icon: string }) => (
     <Link key={item.path} href={item.path} className={`side-link ${isActive(item.path) ? 'active' : ''}`} aria-current={isActive(item.path) ? 'page' : undefined}>
       <Icon name={item.icon} size={20} />{item.label}

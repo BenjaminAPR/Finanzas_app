@@ -33,6 +33,7 @@ export type Account = {
   anchor_date?: string | null;
   anchor_set_at?: string | null;
   maturity_date?: string | null;
+  credit_limit?: number | null;
   archived?: boolean;
 };
 

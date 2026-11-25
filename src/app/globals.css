@@ -489,3 +489,42 @@ button.row:hover { background: var(--bg-hover); }
 .insight.danger::before { background: var(--danger); }
 .insight.info::before { background: var(--brand-honey); }
 a.insight:hover { background: var(--bg-hover); }
+
+/* Billetera */
+.wallet-hero .hero-value { margin-bottom: 0.2rem; }
+.wallet-split { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-top: 0.8rem; padding-top: 0.8rem; border-top: 1px solid color-mix(in srgb, currentColor 22%, transparent); }
+.wallet-split div { display: flex; flex-direction: column; gap: 0.1rem; }
+.wallet-split span { font-size: 0.82rem; opacity: 0.85; }
+.wallet-split strong { font-family: var(--font-display), Georgia, serif; font-size: 1.35rem; font-weight: 600; font-variant-numeric: lining-nums tabular-nums; }
+.wallet-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.6rem; margin: 0.4rem 0 0.6rem; }
+.wallet-head .num { color: var(--text-secondary); font-weight: 600; }
+.wallet-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.75rem; }
+.wallet-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.wallet-actions > * { flex: 1 1 220px; }
+.wcard {
+  position: relative; display: flex; flex-direction: column; gap: 0.15rem; min-height: 150px;
+  padding: 1rem 1.05rem; border-radius: 18px; color: #fffcf6; overflow: hidden;
+  box-shadow: 0 8px 22px rgba(20, 24, 20, 0.18); transition: transform 0.15s;
+}
+.wcard::after { content: ''; position: absolute; inset: auto -30% -60% auto; width: 70%; aspect-ratio: 1; border-radius: 50%; background: rgba(255, 252, 246, 0.08); pointer-events: none; }
+a.wcard:hover { transform: translateY(-2px); }
+.wcard.cash { background: linear-gradient(135deg, #22574a 0%, #2f7a63 100%); }
+.wcard.deposit { background: linear-gradient(135deg, #7a4f10 0%, #c48a2c 100%); }
+.wcard.investment { background: linear-gradient(135deg, #283754 0%, #46628f 100%); }
+.wcard.card { background: linear-gradient(135deg, #1d2220 0%, #3b443f 100%); }
+.wcard.large { min-height: 190px; }
+.wcard-top { display: flex; justify-content: space-between; gap: 0.5rem; font-size: 0.76rem; font-weight: 600; opacity: 0.85; text-transform: uppercase; letter-spacing: 0.04em; }
+.wcard-name { font-weight: 600; font-size: 0.98rem; margin-top: 0.15rem; }
+.wcard-amount { font-family: var(--font-display), Georgia, serif; font-size: 1.75rem; font-weight: 600; letter-spacing: -0.01em; margin-top: auto; font-variant-numeric: lining-nums tabular-nums; }
+.wcard.large .wcard-amount { font-size: 2.4rem; }
+.wcard-meter { height: 5px; border-radius: 99px; background: rgba(255, 252, 246, 0.2); overflow: hidden; margin: 0.35rem 0 0.1rem; }
+.wcard-meter span { display: block; height: 100%; border-radius: 99px; background: var(--brand-honey); }
+.wcard-foot { display: flex; justify-content: space-between; gap: 0.5rem; font-size: 0.78rem; opacity: 0.88; font-variant-numeric: tabular-nums; }
+@media (max-width: 520px) {
+  .wallet-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.6rem; }
+  .wcard { min-height: 128px; padding: 0.85rem; }
+  .wcard-amount { font-size: 1.35rem; }
+  .wcard-foot span:last-child { display: none; }
+}
+.wcard-top span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.wcard-top span:first-child { flex: 1; }

@@ -6,6 +6,7 @@ import { useHouseholdData } from '@/lib/store';
 
 const ICONS: Record<string, ReactNode> = {
   home: <path d="M3 11.5 12 4l9 7.5M5.5 10v9.5h13V10" />,
+  wallet: <path d="M4 7.5h14.5a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18V6.5A1.5 1.5 0 0 1 5.5 5H17M16 13.5h.01" />,
   list: <path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01" />,
   plus: <path d="M12 5v14M5 12h14" />,
   debt: <path d="M3 7h18v11H3zM3 11h18M7 15h3" />,

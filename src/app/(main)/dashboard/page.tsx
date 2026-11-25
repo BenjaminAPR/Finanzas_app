@@ -2,52 +2,39 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Icon, Meter, WithData } from '@/components/ui';
+import { Icon, WithData } from '@/components/ui';
+import { WalletCard } from '@/components/WalletCard';
+import { NewAccountSheet } from '@/components/AccountSheets';
 import { PaySheet } from '@/components/PaySheet';
 import { todayISO } from '@/lib/dates';
-import { clp, dueLabel, shortDate } from '@/lib/format';
-import { dayOf, type Household } from '@/lib/finance';
-import { buildPlan, debtOverview, type UpcomingPayment } from '@/lib/plan';
-import { insights, projectCash } from '@/lib/insights';
-import { CashflowChart } from '@/components/charts';
+import { clp, dueLabel, monthYear } from '@/lib/format';
+import type { AssetKind, Household } from '@/lib/finance';
+import { buildPlan, type UpcomingPayment } from '@/lib/plan';
+import { walletSummary } from '@/lib/wallet';
 
-function Dashboard({ data }: { data: Household }) {
+const GROUPS: { kind: AssetKind; title: string; total: 'cash' | 'savings' | 'investments' | 'cardDebt' }[] = [
+  { kind: 'cash', title: 'Cuentas', total: 'cash' },
+  { kind: 'deposit', title: 'Ahorro y DAP', total: 'savings' },
+  { kind: 'investment', title: 'Inversiones', total: 'investments' },
+  { kind: 'card', title: 'Tarjetas de crédito', total: 'cardDebt' },
+];
+
+function Wallet({ data }: { data: Household }) {
   const today = todayISO();
+  const wallet = useMemo(() => walletSummary(data, today), [data, today]);
   const plan = useMemo(() => buildPlan(data, today), [data, today]);
-  const debts = useMemo(() => debtOverview(data, today), [data, today]);
+  const [adding, setAdding] = useState(false);
   const [paying, setPaying] = useState<UpcomingPayment | null>(null);
-
-  // Solo lo que cobra un banco en fecha fija genera avisos; lo demás va a "Pendientes del mes".
-  const urgent = plan.upcoming.filter(u => !u.flexible && u.daysUntil <= 2);
-  const dueDated = plan.upcoming.filter(u => !u.flexible);
-  const monthly = plan.upcoming.filter(u => u.flexible && u.date <= plan.cycle.end);
-  const projection = useMemo(() => projectCash(data, today), [data, today]);
-  const notes = useMemo(() => insights(data, today), [data, today]);
-  const lastImport = data.transactions.filter(t => t.source === 'import').map(dayOf).sort().at(-1);
-  const hasPlan = plan.incomeTotal > 0;
-  const maxCategory = plan.categories[0]?.total ?? 0;
-  const uncategorized = plan.categories.find(c => c.id === null)?.total ?? 0;
+  const urgent = plan.upcoming.filter(u => !u.flexible && u.daysUntil <= 3);
 
   return (
     <div className="page">
-      <section className={`card hero ${plan.free < 0 ? 'short' : ''}`} aria-label="Plata libre hasta fin de ciclo">
-        <div className="hero-label">
-          {plan.free >= 0 ? `Libre hasta el ${shortDate(plan.cycle.end)}` : `Les faltan para llegar al ${shortDate(plan.cycle.end)}`}
-        </div>
-        <div className="hero-value">{clp(Math.abs(plan.free))}</div>
-        <div className="hero-sub">
-          {plan.free > 0
-            ? `Unos ${clp(plan.perDayFree)} al día por ${plan.cycle.daysLeft} días, después de pagar todo lo comprometido`
-            : 'Lo que tienen y lo que les falta recibir no alcanza para lo ya comprometido'}
-        </div>
-        <div className="hero-lines">
-          <div><span>Hoy en sus cuentas</span><span>{clp(plan.freeParts.cash)}</span></div>
-          {plan.freeParts.incomePending > 0 && <div><span>Sueldos por llegar</span><span>+{clp(plan.freeParts.incomePending)}</span></div>}
-          {plan.freeParts.fixedPending > 0 && <div><span>Gastos del mes por pagar (aprox.)</span><span>-{clp(plan.freeParts.fixedPending)}</span></div>}
-          {plan.freeParts.debtsDue > 0 && <div><span>Cuotas de créditos y personas</span><span>-{clp(plan.freeParts.debtsDue)}</span></div>}
-          {plan.freeParts.cardsSpent > 0 && <div><span>Tarjetas: lo ya gastado</span><span>-{clp(plan.freeParts.cardsSpent)}</span></div>}
-          {plan.freeParts.extraDebt > 0 && <div><span>Abono extra a deudas</span><span>-{clp(plan.freeParts.extraDebt)}</span></div>}
-          <div className="total"><span>{plan.free >= 0 ? 'Libre' : 'Faltan'}</span><span>{clp(Math.abs(plan.free))}</span></div>
+      <section className="card hero wallet-hero" aria-label="Resumen de la billetera">
+        <div className="hero-label">Patrimonio neto</div>
+        <div className="hero-value">{clp(wallet.net)}</div>
+        <div className="wallet-split">
+          <div><span>Tienen</span><strong>{clp(wallet.have)}</strong></div>
+          <div><span>Deben</span><strong>{clp(wallet.owe)}</strong></div>
         </div>
       </section>
 
@@ -58,121 +45,58 @@ function Dashboard({ data }: { data: Household }) {
         </button>
       ))}
 
-
-      {notes.length > 0 && (
-        <div className="insights" aria-label="Avisos">
-          {notes.map(n => n.href
-            ? <Link key={n.text} href={n.href} className={`insight ${n.tone}`}>{n.text}</Link>
-            : <div key={n.text} className={`insight ${n.tone}`}>{n.text}</div>)}
-        </div>
-      )}
-
-      <div className="columns">
-        <div className="stack">
-          <section className="card">
-            <div className="card-head">
-              <h2 className="h3">Cómo viene la plata</h2>
-              <span className="text-muted">Al {shortDate(projection.end.date)}: {clp(projection.end.balance)}</span>
+      {GROUPS.map(group => {
+        const items = wallet.accounts.filter(a => a.asset_kind === group.kind);
+        if (!items.length) return null;
+        return (
+          <section key={group.kind} aria-label={group.title}>
+            <div className="wallet-head">
+              <h2 className="h3">{group.title}</h2>
+              <span className="num">{group.kind === 'card' ? 'Deben ' : ''}{clp(wallet[group.total])}</span>
             </div>
-            <CashflowChart points={projection.points} low={projection.low} />
-            <div className="chart-legend"><span><i className="in" />Entra plata</span><span><i />Pagos</span><span>Toca el gráfico para ver cada día</span></div>
+            <div className="wallet-grid">
+              {items.map(a => <WalletCard key={a.id} account={a} today={today} />)}
+            </div>
           </section>
+        );
+      })}
 
-          <section className="card">
-            <div className="card-head"><h2 className="h3">Vencimientos</h2><span className="text-muted">Tarjetas y créditos</span></div>
+      {wallet.standalone.length > 0 && (
+        <section aria-label="Créditos y deudas">
+          <div className="wallet-head">
+            <h2 className="h3">Créditos y deudas</h2>
+            <span className="num">Deben {clp(wallet.standaloneDebt)}</span>
+          </div>
+          <div className="card" style={{ paddingTop: '0.3rem' }}>
             <div className="list">
-              {dueDated.length === 0 && <p className="text-muted">No hay vencimientos próximos.</p>}
-              {dueDated.slice(0, 6).map(u => (
-                <button key={u.key} className="row" onClick={() => setPaying(u)}>
+              {wallet.standalone.map(item => (
+                <Link key={item.debt.id} href="/debts" className="row">
                   <span className="row-main">
-                    <span className="row-title" style={{ display: 'block' }}>{u.title}</span>
-                    <span className="row-sub" style={{ display: 'block' }}>{u.detail} · {shortDate(u.date)}</span>
+                    <span className="row-title" style={{ display: 'block' }}>{item.debt.name}{item.debt.creditor ? ` · ${item.debt.creditor}` : ''}</span>
+                    <span className="row-sub" style={{ display: 'block' }}>
+                      {item.pendingCount} cuotas de {clp(item.monthly)}{item.endDate ? ` · termina ${monthYear(item.endDate)}` : ''}
+                    </span>
                   </span>
-                  <span className="row-end">{clp(u.amount)}<small className={u.overdue ? 'neg' : ''}>{dueLabel(u.daysUntil)}</small></span>
-                </button>
+                  <span className="row-end">{clp(item.remaining)}</span>
+                </Link>
               ))}
             </div>
-          </section>
-
-          {monthly.length > 0 && (
-            <section className="card">
-              <div className="card-head">
-                <h2 className="h3">Pendientes del mes</h2>
-                <span className="text-muted">Unos {clp(monthly.reduce((s, u) => s + u.amount, 0))}</span>
-              </div>
-              <p className="text-muted" style={{ marginBottom: '0.2rem' }}>Montos y fechas aproximados. Tócalos cuando los paguen.</p>
-              <div className="list">
-                {monthly.map(u => (
-                  <button key={u.key} className="row" onClick={() => setPaying(u)}>
-                    <span className="row-main">
-                      <span className="row-title" style={{ display: 'block' }}>{u.title}</span>
-                      <span className="row-sub" style={{ display: 'block' }}>{u.detail}</span>
-                    </span>
-                    <span className="row-end">~{clp(u.amount)}</span>
-                  </button>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {hasPlan && (
-            <section className="card">
-              <div className="card-head"><h2 className="h3">Presupuesto del ciclo</h2><span className="text-muted">Gastado {clp(plan.spent)}</span></div>
-              <Meter value={plan.spent} max={plan.available} />
-              <p className="text-muted" style={{ margin: '0.4rem 0 0.2rem' }}>Con sueldos completos, así se reparte un mes normal.</p>
-              <div className="list">
-                <div className="row"><span className="row-main">Ingresos</span><span className="row-end pos">{clp(plan.incomeTotal)}</span></div>
-                <div className="row"><span className="row-main">Gastos del mes (aprox.)</span><span className="row-end">-{clp(plan.fixedTotal)}</span></div>
-                <div className="row"><span className="row-main">Cuotas de deudas</span><span className="row-end">-{clp(plan.installmentsTotal)}</span></div>
-                {plan.extraDebt > 0 && <div className="row"><span className="row-main">Abono extra a deudas</span><span className="row-end">-{clp(plan.extraDebt)}</span></div>}
-                <div className="row"><span className="row-main"><strong>Para gastar</strong></span><span className="row-end">{clp(plan.available)}</span></div>
-              </div>
-            </section>
-          )}
-        </div>
-
-        <div className="stack">
-          <div className="tiles">
-            <Link href="/debts" className="card tile">
-              <div className="tile-label">Deuda total</div>
-              <div className="tile-value">{clp(debts.total)}</div>
-              <div className="tile-sub">{clp(debts.monthlyInstallments)} en cuotas al mes</div>
-            </Link>
-            <Link href="/accounts" className="card tile">
-              <div className="tile-label">Patrimonio neto</div>
-              <div className="tile-value">{clp(debts.netWorth)}</div>
-              <div className="tile-sub">Activos {clp(debts.wealth.assets)}</div>
-            </Link>
           </div>
+        </section>
+      )}
 
-          <section className="card">
-            <div className="card-head"><h2 className="h3">En qué se ha ido</h2><Link className="card-link" href="/reports">Ver análisis</Link></div>
-            {plan.categories.length === 0 && <p className="text-muted">Aún no hay gastos en este ciclo.</p>}
-            {plan.categories.slice(0, 6).map(c => (
-              <div key={c.id ?? 'none'} className="hbar">
-                <span>{c.name}</span>
-                <span className="num">{clp(c.total)}{c.limit > 0 ? ` / ${clp(c.limit)}` : ''}</span>
-                <Meter value={c.total} max={c.limit > 0 ? c.limit : maxCategory} warnAt={c.limit > 0 ? 0.85 : 2} />
-              </div>
-            ))}
-            {uncategorized > 0 && <Link className="card-link" href="/transactions?category=none">Ordenar lo que está sin categoría</Link>}
-          </section>
-
-          <Link href="/import" className="card" style={{ display: 'flex', gap: '0.7rem', alignItems: 'center' }}>
-            <Icon name="upload" />
-            <span className="row-main">
-              <span className="row-title" style={{ display: 'block' }}>Importar cartolas</span>
-              <span className="row-sub" style={{ display: 'block' }}>{lastImport ? `Última al ${shortDate(lastImport)}` : 'Sube sus PDF y se ordena solo'}</span>
-            </span>
-          </Link>
-        </div>
+      <div className="wallet-actions">
+        <button className="btn-secondary" onClick={() => setAdding(true)}><Icon name="plus" size={16} />Agregar cuenta, DAP o tarjeta</button>
+        <Link className="btn-secondary" href="/import"><Icon name="upload" size={16} />Actualizar con cartolas</Link>
+        <Link className="btn-secondary" href="/plan"><Icon name="chart" size={16} />Libre este mes: {clp(plan.free)}</Link>
       </div>
 
+      {adding && <NewAccountSheet data={data} onClose={() => setAdding(false)} />}
       {paying && <PaySheet data={data} payment={paying} onClose={() => setPaying(null)} />}
     </div>
   );
 }
 
-export default function DashboardPage() {
-  return <WithData>{data => <Dashboard data={data} />}</WithData>;
+export default function WalletPage() {
+  return <WithData>{data => <Wallet data={data} />}</WithData>;
 }
