@@ -23,20 +23,25 @@ function Dashboard({ data }: { data: Household }) {
 
   return (
     <div className="page">
-      <section className="card hero" aria-label="Disponible para gastar">
-        <div className="hero-label">Pueden gastar hasta el {shortDate(plan.cycle.end)}</div>
-        <div className="hero-value">{hasPlan ? clp(plan.remaining) : '—'}</div>
-        {hasPlan ? (
-          <>
-            <div className="hero-sub">
-              {plan.remaining > 0 ? `Unos ${clp(plan.perDay)} al día por ${plan.cycle.daysLeft} días` : 'Ya se pasaron de lo planificado en este ciclo'}
-            </div>
-            <Meter value={plan.spent} max={plan.available} warnAt={2} />
-            <div className="hero-foot"><span>Gastado {clp(plan.spent)}</span><span>Plan {clp(plan.available)}</span></div>
-          </>
-        ) : (
-          <div className="hero-sub">Agrega sus ingresos y gastos fijos en Ajustes para calcularlo.</div>
-        )}
+      <section className={`card hero ${plan.free < 0 ? 'short' : ''}`} aria-label="Plata libre hasta fin de ciclo">
+        <div className="hero-label">
+          {plan.free >= 0 ? `Libre hasta el ${shortDate(plan.cycle.end)}` : `Les faltan para llegar al ${shortDate(plan.cycle.end)}`}
+        </div>
+        <div className="hero-value">{clp(Math.abs(plan.free))}</div>
+        <div className="hero-sub">
+          {plan.free > 0
+            ? `Unos ${clp(plan.perDayFree)} al día por ${plan.cycle.daysLeft} días, después de pagar todo lo comprometido`
+            : 'Lo que tienen y lo que les falta recibir no alcanza para lo ya comprometido'}
+        </div>
+        <div className="hero-lines">
+          <div><span>Hoy en sus cuentas</span><span>{clp(plan.freeParts.cash)}</span></div>
+          {plan.freeParts.incomePending > 0 && <div><span>Sueldos por llegar</span><span>+{clp(plan.freeParts.incomePending)}</span></div>}
+          {plan.freeParts.fixedPending > 0 && <div><span>Gastos fijos por pagar</span><span>-{clp(plan.freeParts.fixedPending)}</span></div>}
+          {plan.freeParts.debtsDue > 0 && <div><span>Cuotas de créditos y personas</span><span>-{clp(plan.freeParts.debtsDue)}</span></div>}
+          {plan.freeParts.cardsSpent > 0 && <div><span>Tarjetas: lo ya gastado</span><span>-{clp(plan.freeParts.cardsSpent)}</span></div>}
+          {plan.freeParts.extraDebt > 0 && <div><span>Abono extra a deudas</span><span>-{clp(plan.freeParts.extraDebt)}</span></div>}
+          <div className="total"><span>{plan.free >= 0 ? 'Libre' : 'Faltan'}</span><span>{clp(Math.abs(plan.free))}</span></div>
+        </div>
       </section>
 
       {urgent.map(u => (
@@ -46,9 +51,6 @@ function Dashboard({ data }: { data: Household }) {
         </button>
       ))}
 
-      {hasPlan && plan.cashAfterPayments < 0 && (
-        <div className="notice"><Icon name="alert" size={18} /><span>Con el dinero disponible y los ingresos pendientes faltan <strong>{clp(-plan.cashAfterPayments)}</strong> para cubrir los pagos de este ciclo.</span></div>
-      )}
 
       <div className="columns">
         <div className="stack">
@@ -70,7 +72,9 @@ function Dashboard({ data }: { data: Household }) {
 
           {hasPlan && (
             <section className="card">
-              <h2 className="h3" style={{ marginBottom: '0.5rem' }}>Cómo se reparte el ciclo</h2>
+              <div className="card-head"><h2 className="h3">Presupuesto del ciclo</h2><span className="text-muted">Gastado {clp(plan.spent)}</span></div>
+              <Meter value={plan.spent} max={plan.available} />
+              <p className="text-muted" style={{ margin: '0.4rem 0 0.2rem' }}>Con sueldos completos, así se reparte un mes normal.</p>
               <div className="list">
                 <div className="row"><span className="row-main">Ingresos</span><span className="row-end pos">{clp(plan.incomeTotal)}</span></div>
                 <div className="row"><span className="row-main">Gastos fijos</span><span className="row-end">-{clp(plan.fixedTotal)}</span></div>
