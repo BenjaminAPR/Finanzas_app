@@ -451,3 +451,41 @@ button.row:hover { background: var(--bg-hover); }
   .auth-brand .auth-promises { margin-bottom: auto; }
   .auth-mobile-logo { display: none; }
 }
+
+/* Gráficos */
+.chart { position: relative; }
+.chart svg { display: block; width: 100%; height: auto; touch-action: pan-y; }
+.chart-grid { stroke: var(--border-color); stroke-width: 1; }
+.chart-zero { stroke: var(--danger); stroke-width: 1; stroke-dasharray: 4 4; opacity: 0.7; }
+.chart-axis { fill: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.chart-label { fill: var(--text-secondary); font-size: 11px; font-weight: 620; }
+.chart-line { fill: none; stroke: var(--accent-color); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart-dot { fill: var(--accent-color); stroke: var(--bg-card); stroke-width: 2; }
+.chart-dot.in { fill: var(--brand-honey); }
+.chart-dot.active { fill: var(--bg-card); stroke: var(--accent-color); stroke-width: 2.5; }
+.chart-cross { stroke: var(--text-muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.chart-tip {
+  position: absolute; top: 0; pointer-events: none; z-index: 2;
+  display: flex; flex-direction: column; gap: 0.1rem; min-width: 150px; max-width: 230px;
+  padding: 0.5rem 0.65rem; border-radius: 10px; font-size: 0.78rem; line-height: 1.35;
+  background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-color); box-shadow: var(--shadow-md);
+}
+.chart-tip span { color: var(--text-secondary); }
+.chart-legend { display: flex; gap: 1rem; flex-wrap: wrap; font-size: 0.78rem; color: var(--text-secondary); margin-top: 0.4rem; }
+.chart-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 0.35rem; vertical-align: -1px; background: var(--accent-color); }
+.chart-legend i.in { background: var(--brand-honey); }
+.bars { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; align-items: end; height: 150px; }
+.bar { height: 100%; display: flex; align-items: flex-end; padding: 0 1px; border: 0; background: transparent; cursor: default; }
+.bar i { display: block; width: 100%; border-radius: 4px 4px 0 0; background: var(--accent-color); opacity: 0.85; }
+.bar.now i { background: var(--brand-honey); opacity: 1; }
+.bar.active i, .bar:focus-visible i { opacity: 1; outline: 2px solid var(--bg-card); }
+.bars-labels { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; font-size: 0.7rem; color: var(--text-muted); margin-top: 0.3rem; white-space: nowrap; }
+.insights { display: flex; flex-direction: column; gap: 0.5rem; }
+.insight { display: flex; gap: 0.6rem; align-items: flex-start; padding: 0.7rem 0.85rem; border-radius: 14px; font-size: 0.9rem; background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-primary); }
+.insight::before { content: ''; flex: none; width: 8px; height: 8px; margin-top: 0.42rem; border-radius: 50%; background: var(--text-muted); }
+.insight.ok::before { background: var(--success); }
+.insight.warn::before { background: var(--warning); }
+.insight.danger { background: var(--danger-bg); border-color: transparent; }
+.insight.danger::before { background: var(--danger); }
+.insight.info::before { background: var(--brand-honey); }
+a.insight:hover { background: var(--bg-hover); }

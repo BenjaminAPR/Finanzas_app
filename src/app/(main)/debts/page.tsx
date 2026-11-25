@@ -8,6 +8,8 @@ import { addMonths, todayISO } from '@/lib/dates';
 import { clp, dueLabel, monthsLabel, monthYear, shortDate } from '@/lib/format';
 import { splitInstallments, type Household } from '@/lib/finance';
 import { debtOverview, simulatePayoff, type DebtItem, type PayoffOrder, type UpcomingPayment } from '@/lib/plan';
+import { monthlyInstallments } from '@/lib/insights';
+import { MonthBars } from '@/components/charts';
 import { refreshData } from '@/lib/store';
 
 const daysBetween = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / 86_400_000);
@@ -139,6 +141,9 @@ function Debts({ data }: { data: Household }) {
   const finishDate = (months: number) => monthYear(addMonths(today, months));
   const paid = overview.payable.reduce((s, i) => s + i.paid, 0);
   const planned = overview.payable.reduce((s, i) => s + i.total, 0);
+  const months = useMemo(() => monthlyInstallments(data, today), [data, today]);
+  const monthName = (key: string) => monthYear(`${key}-01`);
+  const firstRelief = months.series.findIndex((s, i) => i > 0 && s.total < months.series[i - 1].total - 20000);
 
   async function saveExtra() {
     await supabase.from('household_settings').update({ extra_debt_payment: extra }).eq('id', true);
@@ -159,6 +164,25 @@ function Debts({ data }: { data: Household }) {
         <div className="hero-sub">{clp(overview.monthlyInstallments)} al mes en cuotas</div>
         <Meter value={paid} max={planned} warnAt={2} />
         <div className="hero-foot"><span>Cuotas pagadas {clp(paid)}</span><span>de {clp(planned)}</span></div>
+      </section>
+
+      <section className="card">
+        <div className="card-head">
+          <h2 className="h3">Cuotas por mes</h2>
+          {months.freeFrom && <span className="text-muted">Última cuota: {monthName(months.freeFrom)}</span>}
+        </div>
+        <MonthBars
+          data={months.series.map(s => ({
+            label: monthYear(`${s.month}-01`).split(' ')[0],
+            value: s.total,
+            title: `${monthName(s.month)}: ${clp(s.total)}`,
+          }))}
+        />
+        {firstRelief > 0 && (
+          <p className="text-muted" style={{ marginTop: '0.5rem' }}>
+            Desde {monthName(months.series[firstRelief].month)} pagan {clp(months.series[firstRelief - 1].total - months.series[firstRelief].total)} menos al mes en cuotas.
+          </p>
+        )}
       </section>
 
       <div className="columns">
