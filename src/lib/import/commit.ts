@@ -2,7 +2,7 @@
 
 import { supabase } from '../supabase';
 import { dayOf, type CardStatement, type Household } from '../finance';
-import type { ImportRow } from './classify';
+import { resolveAccount, type ImportRow } from './classify';
 import type { ParsedStatement } from './parse';
 
 const titleCase = (s: string) =>
@@ -19,8 +19,7 @@ export async function commitImport(
   mapping: Record<string, string>,
   learned: { pattern: string; budgetId: string }[],
 ) {
-  const accountFor = (ref: string) =>
-    mapping[ref] ?? data.accounts.find(a => a.statement_ref === ref)?.id ?? null;
+  const accountFor = (s: ParsedStatement) => resolveAccount(s, data.accounts, mapping);
 
   const payload = rows
     .filter(r => r.accountId)
@@ -35,16 +34,35 @@ export async function commitImport(
       source: 'import',
       import_hash: r.key,
       spender: r.spender ?? null,
+      recurring_id: r.recurringId ?? null,
     }));
 
+  let inserted: { id: string; import_hash: string }[] = [];
   if (payload.length) {
-    const { error } = await supabase
+    const { data: saved, error } = await supabase
       .from('transactions')
-      .upsert(payload, { onConflict: 'import_hash', ignoreDuplicates: true });
+      .upsert(payload, { onConflict: 'import_hash', ignoreDuplicates: true })
+      .select('id,import_hash');
+    if (error) throw error;
+    inserted = (saved ?? []) as typeof inserted;
+  }
+
+  // Un pago de cuota que aparece en la cartola marca esa cuota como pagada.
+  const idByKey = new Map(inserted.map(t => [t.import_hash, t.id]));
+  for (const row of rows) {
+    const txId = idByKey.get(row.key);
+    if (!row.installmentId || !txId) continue;
+    const { error } = await supabase
+      .from('installments')
+      .update({ status: 'paid', paid_date: row.date, transaction_id: txId })
+      .eq('id', row.installmentId)
+      .eq('status', 'pending');
     if (error) throw error;
   }
 
+  // Solo se recuerdan números de cuenta reales; las claves "inst:" se resuelven por institución.
   for (const [ref, accountId] of Object.entries(mapping)) {
+    if (ref.startsWith('inst:')) continue;
     const { error } = await supabase.from('accounts').update({ statement_ref: ref }).eq('id', accountId);
     if (error) throw error;
   }
@@ -56,7 +74,7 @@ export async function commitImport(
   };
 
   for (const statement of statements) {
-    const accountId = accountFor(statement.accountRef);
+    const accountId = accountFor(statement);
     if (!accountId || !statement.reconciled) continue;
     if (statement.balance) setAnchor(accountId, statement.balance.amount, statement.balance.date);
     if (statement.card) {
@@ -104,15 +122,17 @@ export async function commitImport(
   // "No facturados" es la lista completa desde el último cierre, y puede incluir compras
   // con fecha anterior al cierre. La deuda real es el prepago más todo ese listado.
   for (const statement of statements) {
-    if (statement.accountKind !== 'card' || statement.card || !statement.rows.length) continue;
-    const accountId = accountFor(statement.accountRef);
+    if (statement.accountKind !== 'card' || statement.card) continue;
+    const purchases = statement.rows.filter(r => r.kind === 'movement' || r.kind === 'fee');
+    if (!purchases.length) continue;
+    const accountId = accountFor(statement);
     if (!accountId || !statement.reconciled) continue;
     const stored = currentStatements
       .filter(s => s.account_id === accountId)
       .sort((a, b) => b.due_date.localeCompare(a.due_date))[0];
     if (stored?.prepay_amount === null || stored?.prepay_amount === undefined) continue;
-    const unbilled = statement.rows.reduce((sum, r) => sum - r.amount, 0);
-    const latest = statement.rows.reduce((max, r) => (r.date > max ? r.date : max), '');
+    const unbilled = purchases.reduce((sum, r) => sum - r.amount, 0);
+    const latest = purchases.reduce((max, r) => (r.date > max ? r.date : max), '');
     // Solo se descuentan aquí los pagos que el nuevo saldo base dejará de contar.
     const inWindow = (day: string) => day > stored.period_end && day <= latest;
     const recorded = data.transactions

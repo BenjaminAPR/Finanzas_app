@@ -39,8 +39,10 @@ export type ParsedStatement = {
 type Cells = string[];
 
 const DATE_FULL = /^\d{2}\/\d{2}\/\d{4}$/;
+const DATE_DASH = /^\d{2}-\d{2}-\d{4}$/;
 const DATE_SHORT = /^\d{2}\/\d{2}$/;
-const MONEY = /^-?\s?\$?\s?-?\d{1,3}(?:[.,]\d{3})+$|^-?\s?\$?\s?-?\d+$/;
+// Pesos con separador de miles; los Excel agregan ".00" o ",00" al final.
+const MONEY = /^-?\s?\$?\s?-?(?:\d{1,3}(?:[.,]\d{3})+|\d+)(?:[.,]\d{2})?$/;
 const FRACTION = /^(\d{1,2})\/(\d{1,2})$/;
 // Los emisores redondean cuotas: la suma de líneas puede diferir unos pesos del total facturado.
 const ROUNDING_TOLERANCE = 10;
@@ -54,7 +56,7 @@ const cleanText = (s: string) => s.replace(/\*+$/, '').replace(/\s+/g, ' ').trim
 
 export function parseMoney(s: string): number {
   const negative = s.includes('-');
-  const value = Number(s.replace(/\D/g, ''));
+  const value = Number(s.trim().replace(/[.,]\d{2}$/, '').replace(/\D/g, ''));
   return negative ? -value : value;
 }
 
@@ -96,22 +98,11 @@ function signByBalance(
   return { rows, reconciled };
 }
 
-function parseChileStatement(lines: string[]): ParsedStatement | null {
-  const range = findCells(lines, /^DESDE \|/);
-  const number = findCells(lines, /N° DE CUENTA/);
-  if (!range || !number) return null;
-  const dates = range.filter(c => DATE_FULL.test(c));
-  if (dates.length < 2) return null;
-  const [from, to] = dates;
-  const refIndex = number.findIndex(c => c.includes('N° DE CUENTA'));
-  const ref = number.slice(refIndex + 1).find(c => /^\d{6,}$/.test(c));
-  if (!ref) return null;
-
-  const yearFor = (day: string) => (Number(day.slice(3, 5)) >= Number(from.slice(3, 5)) ? from.slice(6) : to.slice(6));
+/** Filas "dd/mm" de las cartolas históricas del Banco de Chile, con saldo inicial y final. */
+function shortDateRows(lines: string[], yearFor: (day: string) => string) {
   let opening: number | null = null;
   let closing: number | null = null;
   const rows: ParsedRow[] = [];
-
   for (const line of lines) {
     const cells = cellsOf(line);
     if (!DATE_SHORT.test(cells[0] ?? '')) continue;
@@ -124,7 +115,100 @@ function parseChileStatement(lines: string[]): ParsedStatement | null {
     const amount = BANK_CREDIT.test(description) ? numbers[0] : -numbers[0];
     rows.push({ date, amount, description: cleanText(description), kind: 'movement' });
   }
+  return { rows, opening, closing };
+}
 
+function parseChileHistoricSheet(lines: string[]): ParsedStatement | null {
+  const number = findCells(lines, /^Cuenta: \|/);
+  const emission = findCells(lines, /Fecha de Emisión/)?.find(c => DATE_FULL.test(c));
+  if (!number?.[1] || !emission) return null;
+  const month = Number(emission.slice(3, 5));
+  const year = Number(emission.slice(6));
+  const yearFor = (day: string) => String(Number(day.slice(3, 5)) <= month ? year : year - 1);
+  const { rows, opening, closing } = shortDateRows(lines, yearFor);
+  const total = rows.reduce((sum, r) => sum + r.amount, 0);
+  const ref = refOf(number[1]);
+  return {
+    format: 'Cartola histórica',
+    institution: 'Banco de Chile',
+    accountKind: 'bank',
+    accountRef: ref,
+    label: ref.length > 9 ? 'Cuenta Corriente' : 'Cuenta Vista',
+    balance: closing === null ? null : { amount: closing, date: toISO(emission) },
+    reconciled: opening !== null && closing !== null && opening + total === closing,
+    card: null,
+    rows,
+  };
+}
+
+function parseCmrRecentSheet(lines: string[]): ParsedStatement | null {
+  const rows: ParsedRow[] = [];
+  for (const line of lines) {
+    const cells = cellsOf(line);
+    if (!DATE_DASH.test(cells[0] ?? '') || !/^(Titular|Adicional)$/i.test(cells[2] ?? '')) continue;
+    const amount = parseMoney(cells[3] ?? '0');
+    const pending = Number(cells[4] ?? 0);
+    const instalment = parseMoney(cells[5] ?? cells[3] ?? '0');
+    const base = {
+      date: toISO(cells[0]),
+      description: cleanText(cells[1].replace(/^COMPRA\s+/i, '')),
+      spender: /^titular$/i.test(cells[2]) ? 'titular' as const : 'adicional' as const,
+    };
+    rows.push(pending > 0
+      ? { ...base, amount: -instalment, kind: 'installment', installment: { number: 0, total: pending, purchaseAmount: amount } }
+      : { ...base, amount: -amount, kind: 'movement' });
+  }
+  if (!rows.length) return null;
+  return {
+    format: 'Últimos movimientos',
+    institution: 'CMR Falabella',
+    accountKind: 'card',
+    accountRef: '',
+    label: 'Tarjeta CMR',
+    balance: null,
+    reconciled: true,
+    card: null,
+    rows,
+  };
+}
+
+function parseFalabellaReport(lines: string[]): ParsedStatement | null {
+  const raw: { date: string; description: string; amount: number; balance: number }[] = [];
+  for (const line of lines) {
+    const cells = cellsOf(line);
+    if (!DATE_DASH.test(cells[0] ?? '')) continue;
+    const numbers = cells.slice(2).filter(isMoney).map(parseMoney);
+    if (numbers.length < 2) continue;
+    raw.push({ date: toISO(cells[0]), description: cells[1], amount: numbers[0], balance: numbers[numbers.length - 1] });
+  }
+  if (!raw.length) return null;
+  const { rows, reconciled } = signByBalance(raw, null);
+  return {
+    format: 'Movimientos',
+    institution: 'Banco Falabella',
+    accountKind: 'bank',
+    accountRef: '',
+    label: 'Cuenta Corriente',
+    balance: { amount: raw[0].balance, date: raw[0].date },
+    reconciled,
+    card: null,
+    rows,
+  };
+}
+
+function parseChileStatement(lines: string[]): ParsedStatement | null {
+  const range = findCells(lines, /^DESDE \|/);
+  const number = findCells(lines, /N° DE CUENTA/);
+  if (!range || !number) return null;
+  const dates = range.filter(c => DATE_FULL.test(c));
+  if (dates.length < 2) return null;
+  const [from, to] = dates;
+  const refIndex = number.findIndex(c => c.includes('N° DE CUENTA'));
+  const ref = number.slice(refIndex + 1).find(c => /^\d{6,}$/.test(c));
+  if (!ref) return null;
+
+  const yearFor = (day: string) => (Number(day.slice(3, 5)) >= Number(from.slice(3, 5)) ? from.slice(6) : to.slice(6));
+  const { rows, opening, closing } = shortDateRows(lines, yearFor);
   const total = rows.reduce((sum, r) => sum + r.amount, 0);
   const isVista = lines.some(l => /^CUENTA VISTA/.test(l));
   return {
@@ -141,7 +225,7 @@ function parseChileStatement(lines: string[]): ParsedStatement | null {
 }
 
 function parseChileMovements(lines: string[]): ParsedStatement | null {
-  const number = findCells(lines, /^Cuenta N°/);
+  const number = findCells(lines, /^Cuenta(?: N°)?: \|/);
   if (!number?.[1]) return null;
   const raw: { date: string; description: string; amount: number; balance: number }[] = [];
   for (const line of lines) {
@@ -401,9 +485,12 @@ export function parseStatement(lines: string[]): ParsedStatement | null {
   if (/TARJETA CENCOSUD/.test(text)) return parseCencosudStatement(lines);
   if (/Tarjeta CMR/.test(text) && /no facturados/.test(text)) return parseCmrUnbilled(lines);
   if (/N° de Contrato/.test(text) && /T: Titular/.test(text)) return parseCmrStatement(lines);
+  if (/^FECHA \| DESCRIPCION \| TITULAR\/ADICIONAL/m.test(text)) return parseCmrRecentSheet(lines);
+  if (/Banco de Chile/.test(text) && /Detalle Cartola Histórica/.test(text)) return parseChileHistoricSheet(lines);
   if (/Cartola Histórica/.test(text)) return parseFalabellaHistoric(lines);
   if (/Cartola de Movimientos/.test(text)) return parseFalabellaMovements(lines);
-  if (/Banco de Chile/.test(text) && /^Cuenta N°/m.test(text)) return parseChileMovements(lines);
+  if (/^Fecha \| Descripcion \| Cargo \| Abono \| Saldo/m.test(text)) return parseFalabellaReport(lines);
+  if (/Banco de Chile/.test(text) && /^Cuenta(?: N°)?: \|/m.test(text)) return parseChileMovements(lines);
   if (/N° DE CUENTA/.test(text) && /^DESDE \|/m.test(text)) return parseChileStatement(lines);
   return null;
 }

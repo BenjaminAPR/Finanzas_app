@@ -18,7 +18,7 @@ const KIND_TYPE: Record<AssetKind, string> = {
 };
 const GROUPS: { kind: AssetKind; title: string }[] = [
   { kind: 'cash', title: 'Disponible' },
-  { kind: 'deposit', title: 'Depósitos a plazo' },
+  { kind: 'deposit', title: 'Ahorro y depósitos' },
   { kind: 'investment', title: 'Inversiones' },
   { kind: 'card', title: 'Tarjetas' },
 ];
@@ -99,7 +99,7 @@ function NewAccountSheet({ data, onClose }: { data: Household; onClose: () => vo
           <label className="input-label" htmlFor="a-kind">Tipo</label>
           <select id="a-kind" className="input-field" value={kind} onChange={e => setKind(e.target.value as AssetKind)}>
             <option value="cash">Cuenta o efectivo</option>
-            <option value="deposit">Depósito a plazo</option>
+            <option value="deposit">Ahorro o depósito a plazo</option>
             <option value="investment">Inversión</option>
             <option value="card">Tarjeta de crédito</option>
           </select>
@@ -138,7 +138,7 @@ function Wealth({ data }: { data: Household }) {
 
       <div className="tiles four">
         <div className="card"><div className="tile-label">Disponible</div><div className="tile-value">{clp(wealth.cash)}</div></div>
-        <div className="card"><div className="tile-label">Depósitos</div><div className="tile-value">{clp(wealth.deposits)}</div></div>
+        <div className="card"><div className="tile-label">Ahorro</div><div className="tile-value">{clp(wealth.deposits)}</div></div>
         <div className="card"><div className="tile-label">Inversiones</div><div className="tile-value">{clp(wealth.investments)}</div></div>
         <Link href="/debts" className="card"><div className="tile-label">Deudas</div><div className="tile-value">{clp(overview.total)}</div></Link>
       </div>

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Icon, WithData } from '@/components/ui';
 import { clp, shortDate } from '@/lib/format';
 import { normalize, type Household } from '@/lib/finance';
-import { buildImport, type ImportRow } from '@/lib/import/classify';
+import { buildImport, resolveAccount, statementKey, type ImportRow } from '@/lib/import/classify';
 import { commitImport } from '@/lib/import/commit';
 import { parseStatement, type ParsedStatement } from '@/lib/import/parse';
 import { refreshData } from '@/lib/store';
@@ -26,13 +26,13 @@ function Importer({ data }: { data: Household }) {
 
   const statements = useMemo(() => files.flatMap(f => (f.statement ? [f.statement] : [])), [files]);
   const rows = useMemo(
-    () => buildImport(statements, data.accounts, data.budgets, data.rules, data.settings.own_names, data.transactions, mapping),
+    () => buildImport(statements, data, mapping),
     [statements, data, mapping],
   );
   const unmatched = useMemo(() => {
     const refs = new Map<string, ParsedStatement>();
     for (const s of statements) {
-      if (!mapping[s.accountRef] && !data.accounts.some(a => a.statement_ref === s.accountRef)) refs.set(s.accountRef, s);
+      if (!resolveAccount(s, data.accounts, mapping)) refs.set(statementKey(s), s);
     }
     return [...refs.values()];
   }, [statements, mapping, data.accounts]);
@@ -47,14 +47,17 @@ function Importer({ data }: { data: Household }) {
     setReading(true);
     setResult(null);
     setError(null);
-    const { extractLines } = await import('@/lib/import/pdf');
     const loaded: LoadedFile[] = [];
     for (const file of list) {
       try {
-        const statement = parseStatement(await extractLines(file));
+        const isSheet = /\.xlsx?$/i.test(file.name);
+        const lines = isSheet
+          ? await (await import('@/lib/import/sheet')).extractSheetLines(file)
+          : await (await import('@/lib/import/pdf')).extractLines(file);
+        const statement = parseStatement(lines);
         loaded.push({ name: file.name, statement, error: statement ? undefined : 'Formato no reconocido' });
       } catch {
-        loaded.push({ name: file.name, statement: null, error: 'No se pudo leer el PDF' });
+        loaded.push({ name: file.name, statement: null, error: 'No se pudo leer el archivo' });
       }
     }
     setFiles(current => [...current, ...loaded]);
@@ -127,9 +130,9 @@ function Importer({ data }: { data: Household }) {
         onDrop={onDrop}
       >
         <Icon name="upload" size={28} />
-        <strong>{reading ? 'Leyendo…' : 'Elige o arrastra sus PDF'}</strong>
+        <strong>{reading ? 'Leyendo…' : 'Elige o arrastra sus cartolas en PDF o Excel'}</strong>
         <span className="text-muted">Banco de Chile, Falabella, CMR y Cencosud. Se leen en este dispositivo.</span>
-        <input ref={input} type="file" accept="application/pdf" multiple hidden onChange={e => {
+        <input ref={input} type="file" accept=".pdf,.xls,.xlsx,application/pdf" multiple hidden onChange={e => {
           // Se copia antes de limpiar: FileList queda vacío al reiniciar el input.
           const chosen = Array.from(e.target.files ?? []);
           e.target.value = '';
@@ -163,9 +166,11 @@ function Importer({ data }: { data: Household }) {
         <section className="card form-stack">
           <h2 className="h3">¿A qué cuenta corresponden?</h2>
           {unmatched.map(s => (
-            <div className="input-group" key={s.accountRef}>
-              <label className="input-label" htmlFor={`map-${s.accountRef}`}>{s.institution} · {s.label} terminada en {s.accountRef.slice(-4)}</label>
-              <select id={`map-${s.accountRef}`} className="input-field" value="" onChange={e => setMapping(m => ({ ...m, [s.accountRef]: e.target.value }))}>
+            <div className="input-group" key={statementKey(s)}>
+              <label className="input-label" htmlFor={`map-${statementKey(s)}`}>
+                {s.institution} · {s.label}{s.accountRef ? ` terminada en ${s.accountRef.slice(-4)}` : ''}
+              </label>
+              <select id={`map-${statementKey(s)}`} className="input-field" value="" onChange={e => setMapping(m => ({ ...m, [statementKey(s)]: e.target.value }))}>
                 <option value="">Elegir cuenta</option>
                 {data.accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
