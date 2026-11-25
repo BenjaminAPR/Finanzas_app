@@ -89,6 +89,8 @@ export type UpcomingPayment = {
   minimum?: number;
   overdue: boolean;
   daysUntil: number;
+  /** Sin fecha ni monto exactos (gastos del mes, deudas con personas): no generan avisos de vencimiento. */
+  flexible: boolean;
   statement?: CardStatement;
   installment?: Installment;
   recurring?: RecurringItem;
@@ -156,6 +158,7 @@ export function buildPlan(data: Household, today: string) {
     upcoming.push({
       key: `statement-${s.id}`,
       kind: 'statement',
+      flexible: false,
       title: accountById.get(s.account_id)?.name ?? 'Tarjeta',
       detail: 'Estado de cuenta',
       date: s.due_date,
@@ -173,6 +176,7 @@ export function buildPlan(data: Household, today: string) {
     upcoming.push({
       key: `installment-${i.id}`,
       kind: 'installment',
+      flexible: debt.kind === 'family',
       title: debt.creditor ? `${debt.name} (${debt.creditor})` : debt.name,
       detail: `Cuota ${i.installment_number}`,
       date: i.due_date,
@@ -188,8 +192,9 @@ export function buildPlan(data: Household, today: string) {
     upcoming.push({
       key: `recurring-${f.item.id}`,
       kind: 'recurring',
+      flexible: true,
       title: f.item.name,
-      detail: 'Gasto fijo',
+      detail: 'Gasto del mes',
       date: f.date,
       amount: f.amount,
       overdue: f.date < today,

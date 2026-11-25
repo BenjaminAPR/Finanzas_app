@@ -42,12 +42,12 @@ function RecurringSheet({ data, item, kind, onClose }: { data: Household; item?:
   }
 
   return (
-    <Sheet title={kind === 'income' ? 'Ingreso mensual' : 'Gasto fijo'} onClose={onClose}>
+    <Sheet title={kind === 'income' ? 'Ingreso mensual' : 'Gasto del mes'} onClose={onClose}>
       <form className="form-stack" onSubmit={e => void submit(e)}>
         <div className="input-group"><label className="input-label" htmlFor="r-name">Nombre</label><input id="r-name" className="input-field" value={name} onChange={e => setName(e.target.value)} required /></div>
         <div className="form-row">
-          <div className="input-group"><label className="input-label" htmlFor="r-amount">Monto</label><input id="r-amount" className="input-field" inputMode="numeric" value={amount} onChange={e => setAmount(e.target.value)} required /></div>
-          <div className="input-group"><label className="input-label" htmlFor="r-day">Día del mes</label><input id="r-day" className="input-field" type="number" min="1" max="31" value={day} onChange={e => setDay(e.target.value)} required /></div>
+          <div className="input-group"><label className="input-label" htmlFor="r-amount">Monto aproximado</label><input id="r-amount" className="input-field" inputMode="numeric" value={amount} onChange={e => setAmount(e.target.value)} required /></div>
+          <div className="input-group"><label className="input-label" htmlFor="r-day">Día habitual</label><input id="r-day" className="input-field" type="number" min="1" max="31" value={day} onChange={e => setDay(e.target.value)} required /></div>
         </div>
         {kind === 'expense' && (
           <div className="input-group">
@@ -167,7 +167,7 @@ function Settings({ data }: { data: Household }) {
       </section>
 
       <section className="card">
-        <div className="card-head"><h2 className="h3">Gastos fijos</h2><button className="btn-secondary btn-small" onClick={() => setRecurring({ kind: 'expense' })}><Icon name="plus" size={15} />Agregar</button></div>
+        <div className="card-head"><h2 className="h3">Gastos del mes</h2><button className="btn-secondary btn-small" onClick={() => setRecurring({ kind: 'expense' })}><Icon name="plus" size={15} />Agregar</button></div>
         <div className="list">{recurringList('expense')}</div>
       </section>
 
