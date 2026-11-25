@@ -32,7 +32,7 @@ export function projectCash(data: Household, today: string) {
     events.get(day)!.push(event);
   };
   for (const i of plan.income) if (!i.received) add(i.date, { title: i.item.name, amount: i.amount });
-  for (const u of plan.upcoming) add(u.date, { title: u.title, amount: -u.amount });
+  for (const u of plan.upcoming) add(u.date, { title: u.flexible ? `${u.title} (aprox.)` : u.title, amount: -u.amount });
 
   const points: CashPoint[] = [];
   let balance = plan.wealth.cash;

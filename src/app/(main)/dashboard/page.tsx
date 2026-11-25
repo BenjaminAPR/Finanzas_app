@@ -17,7 +17,10 @@ function Dashboard({ data }: { data: Household }) {
   const debts = useMemo(() => debtOverview(data, today), [data, today]);
   const [paying, setPaying] = useState<UpcomingPayment | null>(null);
 
-  const urgent = plan.upcoming.filter(u => u.daysUntil <= 2);
+  // Solo lo que cobra un banco en fecha fija genera avisos; lo demás va a "Pendientes del mes".
+  const urgent = plan.upcoming.filter(u => !u.flexible && u.daysUntil <= 2);
+  const dueDated = plan.upcoming.filter(u => !u.flexible);
+  const monthly = plan.upcoming.filter(u => u.flexible && u.date <= plan.cycle.end);
   const projection = useMemo(() => projectCash(data, today), [data, today]);
   const notes = useMemo(() => insights(data, today), [data, today]);
   const lastImport = data.transactions.filter(t => t.source === 'import').map(dayOf).sort().at(-1);
@@ -40,7 +43,7 @@ function Dashboard({ data }: { data: Household }) {
         <div className="hero-lines">
           <div><span>Hoy en sus cuentas</span><span>{clp(plan.freeParts.cash)}</span></div>
           {plan.freeParts.incomePending > 0 && <div><span>Sueldos por llegar</span><span>+{clp(plan.freeParts.incomePending)}</span></div>}
-          {plan.freeParts.fixedPending > 0 && <div><span>Gastos fijos por pagar</span><span>-{clp(plan.freeParts.fixedPending)}</span></div>}
+          {plan.freeParts.fixedPending > 0 && <div><span>Gastos del mes por pagar (aprox.)</span><span>-{clp(plan.freeParts.fixedPending)}</span></div>}
           {plan.freeParts.debtsDue > 0 && <div><span>Cuotas de créditos y personas</span><span>-{clp(plan.freeParts.debtsDue)}</span></div>}
           {plan.freeParts.cardsSpent > 0 && <div><span>Tarjetas: lo ya gastado</span><span>-{clp(plan.freeParts.cardsSpent)}</span></div>}
           {plan.freeParts.extraDebt > 0 && <div><span>Abono extra a deudas</span><span>-{clp(plan.freeParts.extraDebt)}</span></div>}
@@ -76,10 +79,10 @@ function Dashboard({ data }: { data: Household }) {
           </section>
 
           <section className="card">
-            <div className="card-head"><h2 className="h3">Próximos pagos</h2><span className="text-muted">{clp(plan.dueInCycle)} este ciclo</span></div>
+            <div className="card-head"><h2 className="h3">Vencimientos</h2><span className="text-muted">Tarjetas y créditos</span></div>
             <div className="list">
-              {plan.upcoming.length === 0 && <p className="text-muted">No hay pagos pendientes.</p>}
-              {plan.upcoming.slice(0, 7).map(u => (
+              {dueDated.length === 0 && <p className="text-muted">No hay vencimientos próximos.</p>}
+              {dueDated.slice(0, 6).map(u => (
                 <button key={u.key} className="row" onClick={() => setPaying(u)}>
                   <span className="row-main">
                     <span className="row-title" style={{ display: 'block' }}>{u.title}</span>
@@ -91,6 +94,27 @@ function Dashboard({ data }: { data: Household }) {
             </div>
           </section>
 
+          {monthly.length > 0 && (
+            <section className="card">
+              <div className="card-head">
+                <h2 className="h3">Pendientes del mes</h2>
+                <span className="text-muted">Unos {clp(monthly.reduce((s, u) => s + u.amount, 0))}</span>
+              </div>
+              <p className="text-muted" style={{ marginBottom: '0.2rem' }}>Montos y fechas aproximados. Tócalos cuando los paguen.</p>
+              <div className="list">
+                {monthly.map(u => (
+                  <button key={u.key} className="row" onClick={() => setPaying(u)}>
+                    <span className="row-main">
+                      <span className="row-title" style={{ display: 'block' }}>{u.title}</span>
+                      <span className="row-sub" style={{ display: 'block' }}>{u.detail}</span>
+                    </span>
+                    <span className="row-end">~{clp(u.amount)}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+
           {hasPlan && (
             <section className="card">
               <div className="card-head"><h2 className="h3">Presupuesto del ciclo</h2><span className="text-muted">Gastado {clp(plan.spent)}</span></div>
@@ -98,7 +122,7 @@ function Dashboard({ data }: { data: Household }) {
               <p className="text-muted" style={{ margin: '0.4rem 0 0.2rem' }}>Con sueldos completos, así se reparte un mes normal.</p>
               <div className="list">
                 <div className="row"><span className="row-main">Ingresos</span><span className="row-end pos">{clp(plan.incomeTotal)}</span></div>
-                <div className="row"><span className="row-main">Gastos fijos</span><span className="row-end">-{clp(plan.fixedTotal)}</span></div>
+                <div className="row"><span className="row-main">Gastos del mes (aprox.)</span><span className="row-end">-{clp(plan.fixedTotal)}</span></div>
                 <div className="row"><span className="row-main">Cuotas de deudas</span><span className="row-end">-{clp(plan.installmentsTotal)}</span></div>
                 {plan.extraDebt > 0 && <div className="row"><span className="row-main">Abono extra a deudas</span><span className="row-end">-{clp(plan.extraDebt)}</span></div>}
                 <div className="row"><span className="row-main"><strong>Para gastar</strong></span><span className="row-end">{clp(plan.available)}</span></div>

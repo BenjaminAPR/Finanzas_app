@@ -19,6 +19,7 @@ function toPayment(item: DebtItem, today: string): UpcomingPayment | null {
   return {
     key: item.next.id,
     kind: 'installment',
+    flexible: item.debt.kind === 'family',
     title: item.debt.creditor ? `${item.debt.name} (${item.debt.creditor})` : item.debt.name,
     detail: `Cuota ${item.next.installment_number}`,
     date: item.next.due_date,
