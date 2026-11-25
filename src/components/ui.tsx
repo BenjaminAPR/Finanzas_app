@@ -9,6 +9,7 @@ const ICONS: Record<string, ReactNode> = {
   wallet: <path d="M4 7.5h14.5a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18V6.5A1.5 1.5 0 0 1 5.5 5H17M16 13.5h.01" />,
   list: <path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01" />,
   plus: <path d="M12 5v14M5 12h14" />,
+  budget: <path d="M12 3.5v8.5h8.5M20.2 15.2A8.5 8.5 0 1 1 8.8 3.8" />,
   debt: <path d="M3 7h18v11H3zM3 11h18M7 15h3" />,
   wealth: <path d="M4 20V10M10 20V5M16 20v-7M21 20H3" />,
   chart: <path d="M4 19h16M7 16v-5M12 16V7M17 16v-3" />,

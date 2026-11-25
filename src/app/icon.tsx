@@ -12,16 +12,18 @@ const SIZES: Record<string, number> = { small: 48, '192': 192, '512': 512 };
 
 export default async function Icon({ id }: { id: Promise<string | number> }) {
   const size = SIZES[String(await id)] ?? 512;
-  return new ImageResponse(<NidoIcon size={size} />, { width: size, height: size });
+  return new ImageResponse(<BrandIcon size={size} radius={size * 0.22} />, { width: size, height: size });
 }
 
-export function NidoIcon({ size }: { size: number }) {
+/** Ícono de la app: tarjeta crema con visto miel sobre verde pino. */
+export function BrandIcon({ size, radius = 0 }: { size: number; radius?: number }) {
   return (
-    <div style={{ width: size, height: size, display: 'flex', background: '#22574A', borderRadius: size * 0.22 }}>
+    <div style={{ width: size, height: size, display: 'flex', background: '#22574A', borderRadius: radius }}>
       <svg width={size} height={size} viewBox="0 0 40 40">
-        <path d="M9 19.5 20 10.5l11 9" fill="none" stroke="#FFFCF6" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" />
-        <circle cx="20" cy="25" r="6.2" fill="#E2A33B" />
-        <path d="M20 22.2v5.6" stroke="#22574A" strokeWidth="1.8" strokeLinecap="round" />
+        <rect x="7.5" y="11.5" width="24" height="16" rx="3.5" fill="#FFFCF6" />
+        <rect x="7.5" y="15.6" width="24" height="3" fill="#22574A" opacity="0.85" />
+        <circle cx="28.5" cy="27" r="6.8" fill="#E2A33B" stroke="#22574A" strokeWidth="2" />
+        <path d="M25.6 27.1l2 2 3.7-4" fill="none" stroke="#22574A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     </div>
   );

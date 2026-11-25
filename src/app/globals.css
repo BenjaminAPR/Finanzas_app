@@ -528,3 +528,41 @@ a.wcard:hover { transform: translateY(-2px); }
 }
 .wcard-top span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .wcard-top span:first-child { flex: 1; }
+
+/* Look tipo tarjeta para los recuadros principales, igual en claro y oscuro */
+.hero {
+  position: relative; overflow: hidden; color: #fffcf6;
+  background: radial-gradient(110% 130% at 100% 0%, rgba(226, 163, 59, 0.26) 0%, transparent 48%), linear-gradient(135deg, #1d4a3e 0%, #2d7560 100%);
+  box-shadow: 0 10px 26px rgba(20, 40, 32, 0.22);
+}
+.hero::after { content: ''; position: absolute; right: -12%; bottom: -55%; width: 55%; aspect-ratio: 1; border-radius: 50%; background: rgba(255, 252, 246, 0.07); pointer-events: none; }
+.hero.short { background: linear-gradient(135deg, #8a2d1e 0%, #c25038 100%); }
+.hero .meter { background: rgba(255, 252, 246, 0.22); }
+.hero .meter > span { background: #fffcf6; }
+.logo-word { font-size: 1.3rem; }
+
+/* Presupuestos */
+.period-chip {
+  display: inline-flex; margin-top: 0.35rem; padding: 0.25rem 0.75rem; border-radius: 99px;
+  border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-secondary); font-size: 0.82rem; font-weight: 560;
+}
+.period-chip:hover { background: var(--bg-hover); }
+.budget-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(175px, 1fr)); gap: 0.7rem; }
+.btile {
+  display: flex; flex-direction: column; gap: 0.35rem; padding: 0.95rem; text-align: left; min-height: 132px;
+  border-radius: 18px; border: 1px solid var(--border-color); background: var(--bg-card); box-shadow: var(--shadow-sm);
+  transition: transform 0.15s, border-color 0.15s;
+}
+.btile:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--accent-color) 40%, var(--border-color)); }
+.btile-name { font-weight: 620; color: var(--text-secondary); font-size: 0.88rem; }
+.btile-left { font-family: var(--font-display), Georgia, serif; font-size: 1.3rem; font-weight: 600; font-variant-numeric: lining-nums tabular-nums; margin-top: auto; }
+.btile.over .btile-left { color: var(--danger); }
+.btile-foot { font-size: 0.78rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.btile.add { align-items: center; justify-content: center; border-style: dashed; color: var(--text-secondary); font-weight: 600; background: transparent; box-shadow: none; }
+@media (max-width: 520px) {
+  .budget-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.55rem; }
+  .btile { min-height: 118px; padding: 0.8rem; }
+  .btile-left { font-size: 1.1rem; }
+}
+.btile-hint { font-size: 0.78rem; color: var(--text-muted); margin-top: -0.3rem; }
+.btile.over .btile-hint { color: var(--danger); }

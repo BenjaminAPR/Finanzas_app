@@ -166,10 +166,10 @@ function Settings({ data }: { data: Household }) {
         <div className="list">{recurringList('income')}</div>
       </section>
 
-      <section className="card">
+      {active.some(r => r.kind === 'expense') && <section className="card">
         <div className="card-head"><h2 className="h3">Gastos del mes</h2><button className="btn-secondary btn-small" onClick={() => setRecurring({ kind: 'expense' })}><Icon name="plus" size={15} />Agregar</button></div>
         <div className="list">{recurringList('expense')}</div>
-      </section>
+      </section>}
 
       <section className="card">
         <div className="card-head"><h2 className="h3">Categorías y límites</h2><button className="btn-secondary btn-small" onClick={() => setCategory({})}><Icon name="plus" size={15} />Agregar</button></div>
