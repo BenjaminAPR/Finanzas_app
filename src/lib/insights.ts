@@ -70,7 +70,7 @@ export function monthlyInstallments(data: Household, today: string, months = 18)
 
 export type Insight = { tone: 'ok' | 'warn' | 'danger' | 'info'; text: string; href?: string };
 
-const clp = (n: number) => `${n < 0 ? '-' : ''}${Math.abs(Math.round(n)).toLocaleString('es-CL')}`;
+const clp = (n: number) => `${n < 0 ? '-' : ''}$${Math.abs(Math.round(n)).toLocaleString('es-CL')}`;
 
 /** Hasta cuatro avisos, del más urgente al más informativo. */
 export function insights(data: Household, today: string): Insight[] {
