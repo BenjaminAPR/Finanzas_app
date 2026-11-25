@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Geist } from 'next/font/google';
+import { Fraunces, Geist } from 'next/font/google';
 import './globals.css';
 
 const geistSans = Geist({
@@ -7,13 +7,21 @@ const geistSans = Geist({
   subsets: ['latin'],
 });
 
+// Serifa cálida para títulos y montos grandes.
+const fraunces = Fraunces({
+  variable: '--font-display',
+  subsets: ['latin'],
+  axes: ['SOFT', 'opsz'],
+});
+
 export const metadata: Metadata = {
-  title: 'Finanzas Hogar',
-  description: 'Las cuentas de la casa, claras y en un solo lugar',
+  title: 'Nido · Finanzas del hogar',
+  description: 'Las cuentas de la casa, en orden y entre los dos.',
+  applicationName: 'Nido',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Finanzas',
+    title: 'Nido',
   },
   formatDetection: {
     telephone: false,
@@ -22,8 +30,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#f5f3ee' },
-    { media: '(prefers-color-scheme: dark)', color: '#111512' },
+    { media: '(prefers-color-scheme: light)', color: '#F6F2EA' },
+    { media: '(prefers-color-scheme: dark)', color: '#0F1513' },
   ],
   width: 'device-width',
   initialScale: 1,
@@ -32,7 +40,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="es-CL" className={geistSans.variable}>
+    <html lang="es-CL" className={`${geistSans.variable} ${fraunces.variable}`}>
       <body>{children}</body>
     </html>
   );

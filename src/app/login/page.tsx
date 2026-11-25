@@ -1,9 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import styles from './login.module.css';
+import { Logo } from '@/components/Logo';
+
+const PROMISES = [
+  'Cuánto pueden gastar, con la plata real que tienen.',
+  'Todas las deudas en un lugar, con fecha de término.',
+  'Suben la cartola del banco y se ordena sola.',
+];
 
 export default function LoginPage() {
   const router = useRouter();
@@ -12,122 +18,90 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    setNotice(null);
     setLoading(true);
-
     try {
       if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (error) throw error;
+        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+        if (signInError) throw signInError;
         router.push('/dashboard');
-      } else {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              full_name: fullName,
-            },
-          },
-        });
-        if (error) throw error;
-        // In a real app we might want them to verify email, 
-        // but by default Supabase might auto-confirm if configured, 
-        // or just log them in. Let's redirect to dashboard.
-        router.push('/dashboard');
+        return;
       }
-    } catch (err: any) {
-      setError(err.message || 'Ocurrió un error inesperado.');
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { full_name: fullName } },
+      });
+      if (signUpError) throw signUpError;
+      if (data.session) {
+        router.push('/dashboard');
+        return;
+      }
+      setNotice('Te enviamos un correo para confirmar la cuenta. Después, pide que te agreguen al hogar.');
+      setIsLogin(true);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '';
+      setError(/invalid login/i.test(message) ? 'Correo o contraseña incorrectos.' : 'No pudimos completar esto. Intenta de nuevo.');
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   return (
-    <div className={styles.container}>
-      <div className={styles.background} />
-      
-      <div className={`card ${styles.loginCard}`}>
-        <div className={styles.header}>
-          <h1 className="h2 text-gradient">Finanzas Hogar</h1>
-          <p className={styles.subtitle}>
-            {isLogin ? 'Ingresa a tu cuenta' : 'Crea una nueva cuenta'}
+    <div className="auth">
+      <aside className="auth-brand">
+        <Logo size={38} />
+        <h1 className="auth-title">Las finanzas de la casa, en orden y entre los dos.</h1>
+        <ul className="auth-promises">
+          {PROMISES.map(p => <li key={p}>{p}</li>)}
+        </ul>
+      </aside>
+
+      <main className="auth-panel">
+        <div className="auth-card">
+          <div className="auth-mobile-logo"><Logo size={34} /></div>
+          <h2 className="h2">{isLogin ? 'Hola de nuevo' : 'Crea tu cuenta'}</h2>
+          <p className="text-secondary" style={{ marginTop: '0.2rem' }}>
+            {isLogin ? 'Entra para ver cómo va el mes.' : 'Para sumarte al hogar.'}
+          </p>
+
+          {error && <div className="notice danger" role="alert" style={{ marginTop: '1rem' }}>{error}</div>}
+          {notice && <div className="notice ok" role="status" style={{ marginTop: '1rem' }}>{notice}</div>}
+
+          <form onSubmit={e => void handleSubmit(e)} className="form-stack" style={{ marginTop: '1.3rem' }}>
+            {!isLogin && (
+              <div className="input-group">
+                <label className="input-label" htmlFor="fullName">Tu nombre</label>
+                <input id="fullName" className="input-field" autoComplete="name" value={fullName} onChange={e => setFullName(e.target.value)} required />
+              </div>
+            )}
+            <div className="input-group">
+              <label className="input-label" htmlFor="email">Correo</label>
+              <input id="email" type="email" className="input-field" autoComplete="email" placeholder="tu@correo.com" value={email} onChange={e => setEmail(e.target.value)} required />
+            </div>
+            <div className="input-group">
+              <label className="input-label" htmlFor="password">Contraseña</label>
+              <input id="password" type="password" className="input-field" autoComplete={isLogin ? 'current-password' : 'new-password'} value={password} onChange={e => setPassword(e.target.value)} required minLength={isLogin ? undefined : 8} />
+            </div>
+            <button type="submit" className="btn-primary btn-block" disabled={loading}>
+              {loading ? 'Un momento…' : isLogin ? 'Entrar' : 'Crear cuenta'}
+            </button>
+          </form>
+
+          <p className="text-muted" style={{ marginTop: '1.2rem', textAlign: 'center' }}>
+            {isLogin ? '¿Primera vez aquí? ' : '¿Ya tienes cuenta? '}
+            <button type="button" className="link-btn" onClick={() => { setIsLogin(!isLogin); setError(null); setNotice(null); }}>
+              {isLogin ? 'Crear cuenta' : 'Entrar'}
+            </button>
           </p>
         </div>
-
-        {error && <div className={styles.errorMsg}>{error}</div>}
-
-        <form onSubmit={handleSubmit} className={styles.form}>
-          {!isLogin && (
-            <div className={styles.inputGroup}>
-              <label className="input-label" htmlFor="fullName">Nombre Completo</label>
-              <input
-                id="fullName"
-                type="text"
-                className="input-field"
-                placeholder="Ej. Juan Pérez"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                required={!isLogin}
-              />
-            </div>
-          )}
-
-          <div className={styles.inputGroup}>
-            <label className="input-label" htmlFor="email">Correo Electrónico</label>
-            <input
-              id="email"
-              type="email"
-              className="input-field"
-              placeholder="tu@correo.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </div>
-
-          <div className={styles.inputGroup}>
-            <label className="input-label" htmlFor="password">Contraseña</label>
-            <input
-              id="password"
-              type="password"
-              className="input-field"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
-
-          <button 
-            type="submit" 
-            className={`btn-primary ${styles.submitBtn}`}
-            disabled={loading}
-          >
-            {loading ? 'Cargando...' : (isLogin ? 'Iniciar Sesión' : 'Registrarse')}
-          </button>
-        </form>
-
-        <div className={styles.footer}>
-          {isLogin ? '¿No tienes cuenta? ' : '¿Ya tienes cuenta? '}
-          <button 
-            className={styles.link}
-            onClick={() => {
-              setIsLogin(!isLogin);
-              setError(null);
-            }}
-          >
-            {isLogin ? 'Regístrate aquí' : 'Inicia sesión'}
-          </button>
-        </div>
-      </div>
+      </main>
     </div>
   );
 }

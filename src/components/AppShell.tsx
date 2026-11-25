@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { clearData, useHouseholdData } from '@/lib/store';
 import { Icon } from './ui';
+import { Logo } from './Logo';
 import { TransactionSheet } from './TransactionSheet';
 
 const PRIMARY = [
@@ -55,7 +56,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <QuickAddContext.Provider value={openAdd}>
       <div className="shell">
         <aside className="sidebar">
-          <div className="brand">Finanzas</div>
+          <Logo />
           <button className="btn-primary side-add" onClick={openAdd}><Icon name="plus" size={18} />Agregar gasto</button>
           {PRIMARY.map(navLink)}
           <div className="side-bottom">
@@ -66,7 +67,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         <main className="main">
           <div className="topbar">
-            <span className="brand">Finanzas</span>
+            <Logo size={28} />
             <div className="topbar-actions">
               <Link href="/reports" className="icon-btn" aria-label="Análisis"><Icon name="chart" /></Link>
               <Link href="/import" className="icon-btn" aria-label="Importar cartolas"><Icon name="upload" /></Link>
