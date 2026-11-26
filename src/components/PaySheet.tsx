@@ -10,7 +10,11 @@ import { refreshData } from '@/lib/store';
 import { Sheet } from './ui';
 
 export function PaySheet({ data, payment, onClose }: { data: Household; payment: UpcomingPayment; onClose: () => void }) {
-  const accounts = data.accounts.filter(a => !a.archived && a.asset_kind === 'cash');
+  // Se puede pagar desde cualquier cuenta propia (corriente, ahorro, DAP o inversión), nunca desde otra tarjeta.
+  const accounts = data.accounts.filter(a => !a.archived && a.asset_kind !== 'card');
+  const groups = ([['cash', 'Cuentas'], ['deposit', 'Ahorro y DAP'], ['investment', 'Inversiones']] as const)
+    .map(([kind, label]) => ({ label, items: accounts.filter(a => a.asset_kind === kind) }))
+    .filter(g => g.items.length);
   const [amount, setAmount] = useState(String(Math.round(payment.amount)));
   const [accountId, setAccountId] = useState(payment.recurring?.account_id ?? accounts[0]?.id ?? '');
   const [date, setDate] = useState(todayISO());
@@ -81,7 +85,11 @@ export function PaySheet({ data, payment, onClose }: { data: Household; payment:
           <div className="input-group">
             <label className="input-label" htmlFor="pay-account">Pagado desde</label>
             <select id="pay-account" className="input-field" value={accountId} onChange={e => setAccountId(e.target.value)}>
-              {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              {groups.map(g => (
+                <optgroup key={g.label} label={g.label}>
+                  {g.items.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </optgroup>
+              ))}
             </select>
           </div>
         )}
