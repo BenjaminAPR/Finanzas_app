@@ -20,7 +20,7 @@ export function TransactionSheet({ data, transaction, onClose }: {
   onClose: () => void;
 }) {
   const accounts = useMemo(
-    () => data.accounts.filter(a => !a.archived && a.asset_kind !== 'deposit' && a.asset_kind !== 'investment'),
+    () => data.accounts.filter(a => !a.archived),
     [data.accounts],
   );
   const transferAccounts = useMemo(() => data.accounts.filter(a => !a.archived), [data.accounts]);
